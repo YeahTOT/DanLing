@@ -1,0 +1,45 @@
+[project]
+name = "danling"
+version = "1.0.0"
+description = "炼丹宠物 — 深度学习训练状态解释层，将 loss/mAP/GPU 状态解读为宠物情绪和炼丹炉状态"
+authors = [{ name = "贾涛" }]
+license = { text = "CC-BY-NC-ND-4.0" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+tensorboard = ["tensorboard"]
+yaml = ["pyyaml"]
+tui = ["textual"]
+web = ["fastapi", "uvicorn"]
+mlflow = ["mlflow"]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1",
+    "build>=1.0",
+    "hatchling>=1.29",
+]
+
+[project.scripts]
+danling = "danling.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/danling"]

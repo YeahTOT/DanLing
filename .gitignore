@@ -1,0 +1,50 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Test, lint, and coverage caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local DanLing runtime state
+/danling.yaml
+/logs/run/
+/logs/tmp/
+/runs/
+/outputs/
+/wandb/
+/mlruns/
+*.log
+
+# Local assistant and editor state
+.claude/
+.codex
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

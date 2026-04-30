@@ -1,0 +1,17 @@
+pet_name: DanLing
+primary_score: mAP50
+primary_loss:
+loss_window: 5
+no_improve_patience: 10
+stale_seconds: 300
+high_memory_ratio: 0.90
+hot_util_percent: 90.0
+watch_interval: 2.0
+baseline_score: 0.60
+sota_score: 0.80
+realm_thresholds:
+#   炼器期: 0.60
+#   筑基期: 0.65
+#   结丹期: 0.70
+#   元婴期: 0.75
+#   化神期: 0.80
