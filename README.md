@@ -2,9 +2,36 @@
 
 **当前版本：v1.0.0**
 
-DanLing 是一个面向深度学习训练过程的 Python CLI/TUI 工具。它读取训练日志和硬件状态，把 loss、mAP、GPU/NPU 指标解释成宠物情绪、炼丹炉状态、修炼境界和诊断建议，让训练过程在终端里更容易被快速理解。
+训练跑起来以后，终端里经常只剩一串 loss、mAP、显存和利用率数字。DanLing 想做的事情很简单：把这些训练指标翻译成一眼能看懂的状态。
 
-DanLing 不替代 TensorBoard、W&B、MLflow、Aim 或 ClearML。它定位为轻量的**状态解释层**和**终端呈现层**，适合放在训练终端、SSH 会话、shell statusline、Claude Code status line 或本地演示流程中使用。
+它会读取训练日志和硬件状态，判断训练是在变好、停滞、日志停更、loss 异常，还是可能遇到显存风险；再用宠物情绪、炼丹炉状态、修炼境界和诊断建议展示出来。你不用从一堆数字里猜训练是否健康，DanLing 会先帮你做一次“翻译”。
+
+DanLing 不替代 TensorBoard、W&B、MLflow、Aim 或 ClearML。它更像一个轻量的**训练状态解释层**和**终端展示层**：只读训练输出，不接管训练任务，适合放在 SSH 终端、训练脚本旁边、shell statusline、Claude Code status line 或本地演示流程中使用。
+
+## 适合谁
+
+- 经常在终端里盯训练日志，希望更快判断训练状态的人
+- 使用 Ultralytics `results.csv` 或 TensorBoard event 做本地训练记录的人
+- 需要在 SSH、远程服务器或轻量环境里查看训练进度的人
+- 想把训练过程做成更直观、更容易演示的 CLI/TUI 工具链的人
+
+## 核心功能
+
+- **读取训练日志**：支持 Ultralytics `results.csv`，也可以安装可选依赖读取 TensorBoard event
+- **理解训练状态**：根据 loss、score、日志更新时间等信息判断训练是否正常、停滞、异常或正在变好
+- **展示修炼境界**：用 baseline/SOTA 或手动阈值，把当前指标映射到炼器期、筑基期、结丹期、元婴期、化神期
+- **给出诊断建议**：提示 NaN/inf、loss 爆炸、指标不提升、日志停更、显存过高、checkpoint 缺失等常见问题
+- **读取硬件状态**：支持 NVIDIA GPU 和 Ascend NPU 的基础信息读取，失败时自动降级，不影响日志分析
+- **多种终端展示方式**：提供一次性状态面板、循环刷新、全屏 TUI、配置 TUI 和适合状态栏使用的单行输出
+- **回放训练日志**：可以把历史 CSV 或 TensorBoard scalar 按行回放成新的 `results.csv`，方便演示和调试
+
+## 项目特色
+
+- **轻量只读**：DanLing 只读取训练日志和硬件信息，不会启动、停止或修改你的训练任务
+- **终端友好**：不需要 Web 服务也能看状态，适合远程服务器和命令行工作流
+- **表达直观**：保留真实指标，同时用状态、境界和诊断把数字变得更容易理解
+- **可逐步使用**：只装基础包就能读 CSV；需要 TUI、TensorBoard、YAML 时再安装对应 extra
+- **失败不打断流程**：没有 GPU/NPU、硬件命令不可用或可选依赖缺失时，会尽量降级而不是直接崩掉
 
 ## 界面预览
 
@@ -34,33 +61,33 @@ DanLing 不替代 TensorBoard、W&B、MLflow、Aim 或 ClearML。它定位为轻
 
 商业授权、企业内部使用或二次分发需求，需要联系作者并获得单独书面许可。这里的“源代码公开”不等同于 MIT/Apache/BSD 这类可自由商用许可证。
 
-## v1.0.0 版本说明
+## 当前版本能力
 
-v1.0.0 是 DanLing 的第一个可用版本，目标是提供稳定的本地 CLI/TUI MVP：能读取真实训练输出，推理训练健康度，展示宠物/炼丹炉状态，配置修炼境界，并给出常见异常诊断。
+v1.0.0 是 DanLing 的第一个可用版本，重点是把本地 CLI/TUI 的基础闭环跑通：能读真实训练输出，能推理训练健康度，能配置修炼境界，也能在终端里持续展示当前状态。
 
-### 已包含能力
+### 功能清单
 
-| 能力 | v1.0.0 状态 | 说明 |
+| 能力 | v1.0.0 状态 | 用来做什么 |
 | --- | --- | --- |
-| Typer CLI | 可用 | 提供 `inspect`、`state`、`status`、`statusline`、`watch`、`doctor`、`hardware`、`simulate`、`config`、`tui` 等命令 |
-| Ultralytics CSV Reader | 可用 | 支持读取训练目录或 `results.csv` 文件，识别 loss、mAP、precision、recall、accuracy、lr 等指标 |
-| TensorBoard Reader | 可选可用 | 需要安装 `danling[tensorboard]`，读取 `events.out.tfevents.*` 中的 scalar |
-| 状态推理 | 可用 | 根据指标趋势推导宠物情绪、最佳指标、日志休眠、loss 异常和训练状态 |
-| 修炼境界 | 可用 | 支持 `baseline_score` / `sota_score` 自动等分，也支持五个手动阈值 |
+| 命令行入口 | 可用 | 提供 `inspect`、`state`、`status`、`statusline`、`watch`、`doctor`、`hardware`、`simulate`、`config`、`tui` 等命令 |
+| Ultralytics CSV 读取 | 可用 | 读取训练目录或 `results.csv`，识别 loss、mAP、precision、recall、accuracy、lr 等指标 |
+| TensorBoard 读取 | 可选可用 | 安装 `danling[tensorboard]` 后，读取 `events.out.tfevents.*` 中的 scalar |
+| 训练状态推理 | 可用 | 根据指标趋势判断宠物情绪、最佳指标、日志休眠、loss 异常和训练状态 |
+| 修炼境界 | 可用 | 根据 `baseline_score` / `sota_score` 自动等分，也支持五个手动阈值 |
 | 诊断建议 | 初版可用 | 覆盖 NaN/inf、loss 爆炸、指标停滞、日志停更、显存风险、低利用率、checkpoint 缺失等场景 |
-| 硬件读取 | 初版可用 | 支持 NVIDIA `nvidia-smi` 和 Ascend `npu-smi info` 的保守读取；失败时优雅降级 |
-| Rich 终端渲染 | 可用 | 支持一次性状态面板和循环刷新 |
-| statusline | 可用 | 输出适合 shell prompt 或状态栏集成的单行状态 |
-| Textual TUI | 可选可用 | 需要安装 `danling[tui]`，提供全屏监控 TUI 和配置 TUI |
+| 硬件读取 | 初版可用 | 支持 NVIDIA `nvidia-smi` 和 Ascend `npu-smi info` 的保守读取；失败时自动降级 |
+| Rich 终端面板 | 可用 | 一次性展示状态，或循环刷新训练状态 |
+| statusline | 可用 | 输出适合 shell prompt、状态栏或 Claude Code status line 集成的单行状态 |
+| Textual TUI | 可选可用 | 安装 `danling[tui]` 后，使用全屏监控 TUI 和配置 TUI |
 | 配置管理 | 可用 | 支持 `danling init`、`danling config show`、`danling config tui` |
-| 训练日志回放仿真 | 可用 | `danling simulate` 可按行回放 CSV 或 TensorBoard scalar，便于演示训练过程 |
+| 训练日志回放 | 可用 | `danling simulate` 可按行回放 CSV 或 TensorBoard scalar，方便演示训练过程 |
 
 ### 当前限制
 
-- W&B、MLflow、Aim、ClearML 等实验平台 Reader 尚未实现
-- Web Dashboard 尚未实现，v1.0.0 重点是 CLI/TUI
+- 还不能直接读取 W&B、MLflow、Aim、ClearML 等实验平台
+- 还没有 Web Dashboard；v1.0.0 重点是 CLI/TUI
 - Ascend NPU 读取目前是保守文本解析，指标完整度低于 NVIDIA
-- Textual TUI 和 TensorBoard Reader 是可选能力，需要额外依赖
+- Textual TUI 和 TensorBoard 读取是可选能力，需要额外安装依赖
 - DanLing 只读训练日志，不负责启动、停止或修改训练任务
 
 ### 版本维护约定
