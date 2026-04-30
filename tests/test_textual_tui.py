@@ -20,6 +20,7 @@ from danling.models import (
 )
 from danling.renderers.textual_app import (
     FURNACE_FRAMES,
+    _read_tui_state,
     create_app,
     furnace_animation_frame,
     pet_animation_frame,
@@ -235,6 +236,23 @@ def test_create_app_instantiates_when_textual_is_available() -> None:
     app = create_app(FIXTURE_DIR, source="csv", interval=0.5, no_hardware=True)
 
     assert app is not None
+
+
+def test_read_tui_state_uses_injected_state_provider() -> None:
+    expected = DanLingState(
+        pet_mood=PetMood.happy,
+        metric=MetricSnapshot(epoch=12, train_loss=0.9, score=0.8, score_name="mAP50"),
+    )
+
+    state = _read_tui_state(
+        FIXTURE_DIR,
+        source="csv",
+        config_path=None,
+        no_hardware=True,
+        state_provider=lambda: expected,
+    )
+
+    assert state is expected
 
 
 def _line_span_center(line: str) -> float:

@@ -21,6 +21,12 @@ from danling.engine.state import build_state
 from danling.hardware import read_all_hardware
 from danling.models import DanLingState, PetMood
 from danling.readers.registry import read_history
+from danling.remote import (
+    RemoteCommandError,
+    RemoteTrainingMonitor,
+    load_remote_profile,
+    read_remote_nvidia_hardware,
+)
 from danling.renderers.console import render_state_panel
 from danling.renderers.statusline import render_statusline
 from danling.simulator import playback_training_log
@@ -32,7 +38,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 config_app = typer.Typer(help="配置文件工具")
+remote_app = typer.Typer(help="通过 SSH 可视化远程训练过程")
 app.add_typer(config_app, name="config")
+app.add_typer(remote_app, name="remote")
 
 console = None
 
@@ -330,6 +338,191 @@ def tui(
     from danling.renderers.textual_app import create_app
 
     create_app(path, source=source, interval=interval, config=config, no_hardware=no_hardware).run()
+
+
+@remote_app.command("setup")
+def remote_setup(
+    profile: Annotated[str, typer.Argument(help="远程配置名称")] = "default",
+) -> None:
+    """打开远程 SSH 密钥配置 TUI。"""
+    if importlib.util.find_spec("textual") is None:
+        typer.echo("Textual remote setup requires: pip install danling[tui]")
+        raise typer.Exit(code=1)
+    from danling.renderers.remote_setup_tui import create_remote_setup_app
+
+    create_remote_setup_app(profile).run()
+
+
+@remote_app.command("status")
+def remote_status(
+    profile: Annotated[str, typer.Argument(help="远程配置名称")],
+    config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
+    ssh_option: Annotated[
+        list[str] | None,
+        typer.Option("--ssh-option", help="传给 ssh 的 -o 选项，可重复"),
+    ] = None,
+    remote_hardware: Annotated[
+        bool,
+        typer.Option("--remote-hardware/--no-remote-hardware", help="读取远程 NVIDIA GPU 状态"),
+    ] = True,
+    sync_timeout: Annotated[float, typer.Option("--sync-timeout", help="SSH 超时秒数")] = 10.0,
+    debug: Annotated[bool, typer.Option("--debug", help="显示调试 traceback")] = False,
+) -> None:
+    """通过 SSH 读取远程训练日志并渲染一次状态面板。"""
+    try:
+        remote_profile = _load_remote_profile_or_exit(profile, debug)
+        with RemoteTrainingMonitor(
+            remote_profile,
+            config,
+            ssh_options=tuple(ssh_option or ()),
+            remote_hardware=remote_hardware,
+            sync_timeout=sync_timeout,
+        ) as monitor:
+            current = monitor.read_state()
+        _get_console().print(render_state_panel(current))
+    except (RemoteCommandError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), debug=debug, exc=exc)
+
+
+@remote_app.command("hardware")
+def remote_hardware(
+    profile: Annotated[str, typer.Argument(help="远程配置名称")],
+    ssh_option: Annotated[
+        list[str] | None,
+        typer.Option("--ssh-option", help="传给 ssh 的 -o 选项，可重复"),
+    ] = None,
+    sync_timeout: Annotated[float, typer.Option("--sync-timeout", help="SSH 超时秒数")] = 10.0,
+    json_output: Annotated[bool, typer.Option("--json/--no-json", help="以 JSON 格式输出")] = False,
+    debug: Annotated[bool, typer.Option("--debug", help="显示调试 traceback")] = False,
+) -> None:
+    """通过 SSH 读取远程 NVIDIA GPU 状态。"""
+    try:
+        remote_profile = _load_remote_profile_or_exit(profile, debug)
+        snapshots = read_remote_nvidia_hardware(
+            remote_profile.to_options(
+                ssh_options=tuple(ssh_option or ()),
+                sync_timeout=sync_timeout,
+            )
+        )
+    except (RemoteCommandError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), debug=debug, exc=exc)
+
+    if json_output:
+        _echo_json([snapshot.to_dict() for snapshot in snapshots])
+        return
+
+    table = Table(title=f"DanLing Remote Hardware — {profile}")
+    table.add_column("设备")
+    table.add_column("利用率")
+    table.add_column("显存")
+    table.add_column("温度")
+    table.add_column("功耗")
+    if not snapshots:
+        table.add_row("unknown", "-", "-", "-", "-")
+    for snapshot in snapshots:
+        memory = "-"
+        if snapshot.memory_used_mb is not None and snapshot.memory_total_mb is not None:
+            memory = f"{snapshot.memory_used_mb / 1024:.1f}/{snapshot.memory_total_mb / 1024:.1f}G"
+        table.add_row(
+            f"{snapshot.device_type}:{snapshot.device_id or '-'} {snapshot.name or ''}".strip(),
+            f"{snapshot.util_percent:.0f}%" if snapshot.util_percent is not None else "-",
+            memory,
+            f"{snapshot.temperature_c:.0f}C" if snapshot.temperature_c is not None else "-",
+            f"{snapshot.power_w:.0f}W" if snapshot.power_w is not None else "-",
+        )
+    _get_console().print(table)
+
+
+@remote_app.command("watch")
+def remote_watch(
+    profile: Annotated[str, typer.Argument(help="远程配置名称")],
+    config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
+    interval: Annotated[float | None, typer.Option("--interval", help="刷新间隔秒数")] = None,
+    ssh_option: Annotated[
+        list[str] | None,
+        typer.Option("--ssh-option", help="传给 ssh 的 -o 选项，可重复"),
+    ] = None,
+    remote_hardware: Annotated[
+        bool,
+        typer.Option("--remote-hardware/--no-remote-hardware", help="读取远程 NVIDIA GPU 状态"),
+    ] = True,
+    sync_timeout: Annotated[float, typer.Option("--sync-timeout", help="SSH 超时秒数")] = 10.0,
+    debug: Annotated[bool, typer.Option("--debug", help="显示调试 traceback")] = False,
+) -> None:
+    """通过 SSH 循环刷新远程训练状态面板。"""
+    cfg = _load_config_or_exit(config, debug)
+    refresh_interval = interval if interval is not None else cfg.watch_interval
+    try:
+        remote_profile = _load_remote_profile_or_exit(profile, debug)
+        with RemoteTrainingMonitor(
+            remote_profile,
+            config,
+            ssh_options=tuple(ssh_option or ()),
+            remote_hardware=remote_hardware,
+            sync_timeout=sync_timeout,
+        ) as monitor:
+            with Live(refresh_per_second=4, screen=False) as live:
+                while True:
+                    live.update(render_state_panel(monitor.read_state()))
+                    time.sleep(refresh_interval)
+    except KeyboardInterrupt:
+        typer.echo("DanLing remote watch stopped.")
+    except (RemoteCommandError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), debug=debug, exc=exc)
+
+
+@remote_app.command("tui")
+def remote_tui(
+    profile: Annotated[str, typer.Argument(help="远程配置名称")],
+    config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
+    interval: Annotated[float, typer.Option("--interval", help="刷新间隔秒数")] = 2.0,
+    ssh_option: Annotated[
+        list[str] | None,
+        typer.Option("--ssh-option", help="传给 ssh 的 -o 选项，可重复"),
+    ] = None,
+    remote_hardware: Annotated[
+        bool,
+        typer.Option("--remote-hardware/--no-remote-hardware", help="读取远程 NVIDIA GPU 状态"),
+    ] = True,
+    sync_timeout: Annotated[float, typer.Option("--sync-timeout", help="SSH 超时秒数")] = 10.0,
+    debug: Annotated[bool, typer.Option("--debug", help="显示调试 traceback")] = False,
+) -> None:
+    """通过 SSH 启动远程训练 Textual 全屏监控 TUI。"""
+    if importlib.util.find_spec("textual") is None:
+        typer.echo("Textual UI requires: pip install danling[tui]")
+        raise typer.Exit(code=1)
+    from danling.renderers.textual_app import create_app
+
+    try:
+        remote_profile = _load_remote_profile_or_exit(profile, debug)
+        with RemoteTrainingMonitor(
+            remote_profile,
+            config,
+            ssh_options=tuple(ssh_option or ()),
+            remote_hardware=remote_hardware,
+            sync_timeout=sync_timeout,
+        ) as monitor:
+            create_app(
+                Path(remote_profile.remote_path),
+                source="csv",
+                interval=interval,
+                config=config,
+                state_provider=monitor.read_state,
+                display_label=monitor.display_label,
+            ).run()
+    except (RemoteCommandError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), debug=debug, exc=exc)
+
+
+def _load_remote_profile_or_exit(profile: str, debug: bool):
+    try:
+        return load_remote_profile(profile)
+    except KeyError as exc:
+        _fail(
+            f"远程配置不存在: {profile}. Run: danling remote setup {profile}",
+            debug=debug,
+            exc=exc,
+        )
 
 
 def _build_state_for_path(

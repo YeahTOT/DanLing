@@ -4,4 +4,4 @@
 不替代 TensorBoard / W&B / MLflow，只在其之上提供状态解释和终端呈现。
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

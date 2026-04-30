@@ -2,7 +2,7 @@
 
 > 把训练日志和硬件指标翻译成一眼能看懂的终端训练状态。
 
-**当前版本：v1.0.0** · **Python：3.10+** · **许可证：CC BY-NC-ND 4.0**
+**当前版本：v1.1.0** · **Python：3.10+** · **许可证：CC BY-NC-ND 4.0**
 
 DanLing 是一个轻量的 Python CLI/TUI 工具。它读取训练日志和 GPU/NPU 状态，把 loss、mAP、显存、利用率这些数字解释成训练状态、宠物情绪、炼丹炉状态、修炼境界和诊断建议。
 
@@ -28,6 +28,7 @@ DanLing 是一个轻量的 Python CLI/TUI 工具。它读取训练日志和 GPU/
 | 诊断建议 | 提示 NaN/inf、loss 爆炸、长期无提升、显存风险、checkpoint 缺失等问题 |
 | 硬件状态 | 读取 NVIDIA GPU 和 Ascend NPU 基础状态，失败时自动降级 |
 | 终端展示 | 支持 Rich 面板、循环 watch、Textual 全屏 TUI、配置 TUI 和 statusline |
+| 远程可视化 | 通过 SSH 密钥读取远程 `results.csv`，并读取远程 NVIDIA GPU 状态 |
 | 日志回放 | 可按行回放历史 CSV/TensorBoard scalar，便于演示和调试 |
 
 ## 快速启动
@@ -68,6 +69,17 @@ danling watch logs/run --source csv --config danling.yaml --no-hardware
 danling tui logs/run --source csv --config danling.yaml --no-hardware
 ```
 
+通过 SSH 可视化远程训练：
+
+```bash
+danling remote setup trainbox
+danling remote hardware trainbox
+danling remote status trainbox --config danling.yaml
+danling remote tui trainbox --config danling.yaml
+```
+
+`remote setup` 会用 TUI 辅助填写 `user@host`、远程日志目录和 SSH 私钥路径，并提示执行 `ssh-copy-id`。监控阶段强制使用 `ssh -i <key> -o BatchMode=yes`，不会等待密码输入；远程 GPU 状态默认通过 `nvidia-smi` 读取，也可以用 `remote hardware` 单独查看。当前远程监控只支持 Ultralytics `results.csv`。
+
 回放历史日志做演示：
 
 ```bash
@@ -76,17 +88,18 @@ danling simulate logs/ultralytics/results.csv logs/run --interval 2
 
 更完整的上手流程见 [快速启动](快速启动.md) 和 [Getting Started](docs/getting-started.md)。
 
-## v1.0.0 概览
+## v1.1.0 概览
 
-v1.0.0 是 DanLing 的第一个可用版本，目标是跑通本地 CLI/TUI 闭环：读取真实训练输出，推理训练健康度，配置修炼境界，并在终端里持续展示当前状态。
+v1.1.0 在本地 CLI/TUI 闭环基础上加入 SSH 远程可视化：可以通过密钥读取远程训练日志、查看远程 NVIDIA GPU 状态，并在本地终端 TUI 中持续刷新远程训练过程。
 
-| 类别 | v1.0.0 状态 |
+| 类别 | v1.1.0 状态 |
 | --- | --- |
 | 数据源 | Ultralytics CSV 可用；TensorBoard event 可选可用 |
 | 展示方式 | Rich 面板、watch、statusline、Textual TUI 可用 |
 | 配置能力 | `danling init`、`danling config show`、`danling config tui` 可用 |
 | 诊断能力 | NaN/inf、loss 爆炸、无提升、日志停更、显存风险、低利用率、checkpoint 缺失 |
 | 硬件读取 | NVIDIA 基础支持；Ascend 保守解析 |
+| 远程监控 | `danling remote setup/hardware/status/watch/tui` 通过 SSH 密钥读取远程日志和 GPU |
 | 当前限制 | 暂不支持 W&B/MLflow/Aim/ClearML 直连；暂无 Web Dashboard |
 
 ## 文档导航
@@ -102,6 +115,7 @@ v1.0.0 是 DanLing 的第一个可用版本，目标是跑通本地 CLI/TUI 闭�
 | [Diagnostics](docs/diagnostics.md) | 诊断项和 `danling doctor` |
 | [Hardware](docs/hardware.md) | NVIDIA / Ascend 硬件读取和降级策略 |
 | [Development](docs/development.md) | 本地开发命令和模块边界 |
+| [Release v1.1.0](docs/releases/v1.1.0.md) | v1.1.0 发布说明 |
 
 ## 开发
 

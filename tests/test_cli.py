@@ -4,11 +4,14 @@ import csv
 import json
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from types import ModuleType
 
 from typer.testing import CliRunner
 
 from danling.cli import app
+from danling.models import DanLingState, HardwareSnapshot, MetricSnapshot, PetMood
+from danling.remote import RemoteProfile
 
 runner = CliRunner()
 
@@ -117,6 +120,124 @@ def test_config_tui_missing_textual_has_clear_message(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "danling[tui]" in result.stdout
+
+
+def test_remote_status_uses_saved_remote_profile(monkeypatch, tmp_path) -> None:
+    created: dict[str, object] = {}
+    profile = RemoteProfile(
+        name="lab",
+        host="trainbox",
+        remote_path="/runs/exp",
+        identity=tmp_path / "id_ed25519",
+        port=2222,
+    )
+
+    class FakeRemoteMonitor:
+        def __init__(
+            self,
+            remote_profile: RemoteProfile,
+            config_path: Path | None,
+            *,
+            ssh_options: tuple[str, ...],
+            remote_hardware: bool,
+            sync_timeout: float,
+        ) -> None:
+            created.update(
+                {
+                    "profile": remote_profile,
+                    "config_path": config_path,
+                    "ssh_options": ssh_options,
+                    "remote_hardware": remote_hardware,
+                    "sync_timeout": sync_timeout,
+                }
+            )
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read_state(self) -> DanLingState:
+            return DanLingState(
+                pet_mood=PetMood.happy,
+                metric=MetricSnapshot(epoch=8, train_loss=1.2, score=0.7, score_name="mAP50"),
+                hardware=[HardwareSnapshot(device_type="nvidia", util_percent=66)],
+            )
+
+    monkeypatch.setattr("danling.cli.RemoteTrainingMonitor", FakeRemoteMonitor, raising=False)
+    monkeypatch.setattr("danling.cli.load_remote_profile", lambda name: profile)
+
+    result = runner.invoke(
+        app,
+        [
+            "remote",
+            "status",
+            "lab",
+            "--ssh-option",
+            "StrictHostKeyChecking=no",
+            "--sync-timeout",
+            "4",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "mAP50" in result.stdout
+    assert created == {
+        "profile": profile,
+        "config_path": None,
+        "ssh_options": ("StrictHostKeyChecking=no",),
+        "remote_hardware": True,
+        "sync_timeout": 4.0,
+    }
+
+
+def test_remote_status_without_profile_shows_setup_hint(monkeypatch) -> None:
+    def raise_missing(name):
+        raise KeyError(name)
+
+    monkeypatch.setattr("danling.cli.load_remote_profile", raise_missing)
+
+    result = runner.invoke(app, ["remote", "status", "missing"])
+
+    assert result.exit_code == 1
+    assert "danling remote setup missing" in result.stderr
+
+
+def test_remote_hardware_renders_saved_profile_gpu(monkeypatch, tmp_path) -> None:
+    profile = RemoteProfile(
+        name="lab",
+        host="trainbox",
+        remote_path="/runs/exp",
+        identity=tmp_path / "id_ed25519",
+    )
+    created: dict[str, object] = {}
+
+    def fake_read_hardware(options):
+        created["options"] = options
+        return [
+            HardwareSnapshot(
+                device_type="nvidia",
+                device_id="0",
+                name="RTX 4090",
+                util_percent=76,
+                memory_used_mb=21_400,
+                memory_total_mb=24_000,
+                temperature_c=62,
+                power_w=310,
+            )
+        ]
+
+    monkeypatch.setattr("danling.cli.load_remote_profile", lambda name: profile)
+    monkeypatch.setattr("danling.cli.read_remote_nvidia_hardware", fake_read_hardware)
+
+    result = runner.invoke(app, ["remote", "hardware", "lab"])
+
+    assert result.exit_code == 0
+    assert "RTX 4090" in result.stdout
+    assert "76%" in result.stdout
+    assert "310W" in result.stdout
+    assert created["options"].host == "trainbox"
 
 
 def test_doctor_path_json() -> None:

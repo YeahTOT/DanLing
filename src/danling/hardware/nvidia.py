@@ -9,6 +9,12 @@ import time
 from danling.hardware.base import BaseHardwareReader
 from danling.models import HardwareSnapshot
 
+NVIDIA_SMI_QUERY_ARGS = [
+    "nvidia-smi",
+    "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+    "--format=csv,noheader,nounits",
+]
+
 
 class NvidiaSMIReader(BaseHardwareReader):
     @property
@@ -23,11 +29,7 @@ class NvidiaSMIReader(BaseHardwareReader):
             return []
         try:
             result = subprocess.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
-                    "--format=csv,noheader,nounits",
-                ],
+                NVIDIA_SMI_QUERY_ARGS,
                 capture_output=True,
                 text=True,
                 timeout=3,
@@ -38,7 +40,12 @@ class NvidiaSMIReader(BaseHardwareReader):
 
         if result.returncode != 0:
             return []
-        return [_parse_line(line) for line in result.stdout.splitlines() if line.strip()]
+        return parse_nvidia_smi_csv(result.stdout)
+
+
+def parse_nvidia_smi_csv(output: str) -> list[HardwareSnapshot]:
+    """Parse `nvidia-smi --format=csv,noheader,nounits` output."""
+    return [_parse_line(line) for line in output.splitlines() if line.strip()]
 
 
 def _parse_line(line: str) -> HardwareSnapshot:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from danling.config import load_config
@@ -315,7 +316,14 @@ def require_textual() -> None:
         raise RuntimeError("Textual UI requires: pip install danling[tui]")
 
 
-def create_app(path: Path, source: str = "auto", interval: float = 2.0, **kwargs):
+def create_app(
+    path: Path,
+    source: str = "auto",
+    interval: float = 2.0,
+    state_provider: Callable[[], DanLingState] | None = None,
+    display_label: str | None = None,
+    **kwargs,
+):
     """创建 Textual App；未安装 Textual 时给出友好错误。"""
     require_textual()
 
@@ -325,6 +333,7 @@ def create_app(path: Path, source: str = "auto", interval: float = 2.0, **kwargs
 
     config_path = kwargs.get("config")
     no_hardware = bool(kwargs.get("no_hardware", False))
+    path_label = display_label or str(path)
 
     class DanLingTUIApp(App):
         BINDINGS = [("q", "quit", "退出"), ("r", "refresh", "刷新"), ("h", "help", "帮助")]
@@ -387,7 +396,13 @@ def create_app(path: Path, source: str = "auto", interval: float = 2.0, **kwargs
 
         def refresh_state(self) -> None:
             try:
-                self.state = _read_tui_state(path, source, config_path, no_hardware)
+                self.state = _read_tui_state(
+                    path,
+                    source,
+                    config_path,
+                    no_hardware,
+                    state_provider=state_provider,
+                )
                 self.error_message = None
             except Exception as exc:
                 self.state = None
@@ -409,7 +424,7 @@ def create_app(path: Path, source: str = "auto", interval: float = 2.0, **kwargs
                 pet_panel.update("DanLing Help\n\nq 退出\nr 立即刷新\nh 切换帮助")
                 furnace_panel.update("动画刷新: 0.25s\n数据刷新: --interval")
                 metrics_panel.update(
-                    f"path: {path}\nsource: {source}\nconfig: --config danling.yaml"
+                    f"path: {path_label}\nsource: {source}\nconfig: --config danling.yaml"
                 )
                 hardware_panel.update(
                     "配置: danling config tui\n"
@@ -419,7 +434,7 @@ def create_app(path: Path, source: str = "auto", interval: float = 2.0, **kwargs
                 return
 
             if self.error_message is not None or self.state is None:
-                pet_panel.update(f"DanLing TUI\npath: {path}\nsource: {source}")
+                pet_panel.update(f"DanLing TUI\npath: {path_label}\nsource: {source}")
                 furnace_panel.update("furnace unknown")
                 metrics_panel.update(f"error: {self.error_message or 'loading'}")
                 hardware_panel.update("hardware: unknown")
@@ -551,7 +566,10 @@ def _read_tui_state(
     source: str,
     config_path: Path | None,
     no_hardware: bool,
+    state_provider: Callable[[], DanLingState] | None = None,
 ) -> DanLingState:
+    if state_provider is not None:
+        return state_provider()
     config = load_config(str(config_path) if config_path is not None else None)
     history = read_history(str(path), source=source)
     hardware = [] if no_hardware else read_all_hardware()
