@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import sys
+from dataclasses import dataclass
+from types import ModuleType
+
 import pytest
 
 from danling.config import DanLingConfig, load_config
@@ -15,6 +20,46 @@ from danling.renderers.config_tui import (
     suggest_config_from_results,
     validate_config_form,
 )
+
+
+@dataclass(frozen=True)
+class FakeScalarEvent:
+    step: int
+    value: float
+    wall_time: float
+
+
+def install_fake_tensorboard(
+    monkeypatch,
+    events_by_file: dict[str, dict[str, list[FakeScalarEvent]]],
+) -> None:
+    class FakeEventAccumulator:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
+        def Reload(self) -> None:
+            return None
+
+        def Tags(self) -> dict[str, list[str]]:
+            return {"scalars": list(events_by_file.get(self.path, {}))}
+
+        def Scalars(self, tag: str) -> list[FakeScalarEvent]:
+            return events_by_file[self.path][tag]
+
+    tensorboard = ModuleType("tensorboard")
+    backend = ModuleType("tensorboard.backend")
+    event_processing = ModuleType("tensorboard.backend.event_processing")
+    event_accumulator = ModuleType("tensorboard.backend.event_processing.event_accumulator")
+    event_accumulator.EventAccumulator = FakeEventAccumulator
+
+    monkeypatch.setitem(sys.modules, "tensorboard", tensorboard)
+    monkeypatch.setitem(sys.modules, "tensorboard.backend", backend)
+    monkeypatch.setitem(sys.modules, "tensorboard.backend.event_processing", event_processing)
+    monkeypatch.setitem(
+        sys.modules,
+        "tensorboard.backend.event_processing.event_accumulator",
+        event_accumulator,
+    )
 
 
 def test_config_to_form_values_flattens_realm_thresholds() -> None:
@@ -174,6 +219,39 @@ def test_suggest_config_from_ultralytics_results_supports_raw_metric_name(tmp_pa
     assert values["sota_score"] == "0.45"
 
 
+def test_suggest_config_from_tensorboard_path_uses_reader_registry(
+    tmp_path, monkeypatch
+) -> None:
+    event_file = tmp_path / "val" / "events.out.tfevents.val"
+    event_file.parent.mkdir()
+    event_file.write_text("", encoding="utf-8")
+    install_fake_tensorboard(
+        monkeypatch,
+        {
+            str(event_file): {
+                "mAP50": [
+                    FakeScalarEvent(step=1, value=0.10, wall_time=10.0),
+                    FakeScalarEvent(step=2, value=0.20, wall_time=20.0),
+                    FakeScalarEvent(step=3, value=0.30, wall_time=30.0),
+                    FakeScalarEvent(step=4, value=0.40, wall_time=40.0),
+                    FakeScalarEvent(step=5, value=0.50, wall_time=50.0),
+                ],
+            },
+        },
+    )
+
+    values = suggest_config_from_results(tmp_path, "mAP50", source="tensorboard")
+
+    assert values["primary_score"] == "mAP50"
+    assert values["baseline_score"] == "0.1"
+    assert values["sota_score"] == "0.5"
+
+
+def test_suggest_config_rejects_unknown_auto_source(tmp_path) -> None:
+    with pytest.raises(ValueError, match="不支持的数据源"):
+        suggest_config_from_results(tmp_path, "mAP50", source="unknown")
+
+
 def test_suggest_config_from_ultralytics_results_rejects_missing_metric(tmp_path) -> None:
     path = tmp_path / "results.csv"
     path.write_text(
@@ -258,3 +336,22 @@ def test_create_config_app_instantiates_when_textual_is_available(tmp_path) -> N
     app = create_config_app(tmp_path / "danling.yaml")
 
     assert app is not None
+
+
+def test_config_app_auto_menu_selects_tensorboard_when_textual_is_available(tmp_path) -> None:
+    try:
+        import textual  # noqa: F401
+    except ImportError:
+        return
+
+    async def run_app() -> None:
+        app = create_config_app(tmp_path / "danling.yaml")
+        async with app.run_test() as pilot:
+            await pilot.press("2")
+            assert app.mode == "auto-menu"
+
+            await pilot.press("2")
+            assert app.mode == "auto-form"
+            assert app.auto_source == "tensorboard"
+
+    asyncio.run(run_app())

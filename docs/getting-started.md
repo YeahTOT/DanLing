@@ -44,6 +44,12 @@ danling status examples/ultralytics_run --config danling.yaml --no-hardware
 danling simulate logs/ultralytics/results.csv logs/run --interval 2
 ```
 
+如果源是 TensorBoard logdir：
+
+```bash
+danling simulate logs/tensorboard logs/run --source tensorboard --interval 2
+```
+
 ```bash
 danling tui logs/run --source csv --config danling.yaml --no-hardware
 ```

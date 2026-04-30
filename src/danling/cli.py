@@ -23,7 +23,7 @@ from danling.models import DanLingState, PetMood
 from danling.readers.registry import read_history
 from danling.renderers.console import render_state_panel
 from danling.renderers.statusline import render_statusline
-from danling.simulator import playback_results_csv
+from danling.simulator import playback_training_log
 from danling.storage.json_store import JsonStateStore
 
 app = typer.Typer(
@@ -164,14 +164,18 @@ def watch(
 
 @app.command()
 def simulate(
-    source_csv: Annotated[
+    source_path: Annotated[
         Path,
-        typer.Argument(help="源 results.csv 路径"),
+        typer.Argument(help="源 results.csv、训练目录或 TensorBoard event 路径"),
     ] = Path("logs/ultralytics/results.csv"),
     output: Annotated[
         Path,
         typer.Argument(help="输出 run 目录或 results.csv 路径"),
     ] = Path("logs/run"),
+    source: Annotated[
+        str,
+        typer.Option("--source", help="数据源：auto/csv/tensorboard"),
+    ] = "csv",
     interval: Annotated[float, typer.Option("--interval", help="每行写入间隔秒数")] = 2.0,
     max_rows: Annotated[int | None, typer.Option("--max-rows", help="最多回放行数")] = None,
     overwrite: Annotated[
@@ -179,12 +183,13 @@ def simulate(
         typer.Option("--overwrite/--append", help="覆盖或追加目标 results.csv"),
     ] = True,
 ) -> None:
-    """按行回放 results.csv，用于仿真训练中的日志增长。"""
+    """按行回放训练日志，用于仿真训练中的日志增长。"""
     try:
         last_progress = None
-        for progress in playback_results_csv(
-            source_csv,
+        for progress in playback_training_log(
+            source_path,
             output,
+            source=source,
             interval=interval,
             max_rows=max_rows,
             overwrite=overwrite,

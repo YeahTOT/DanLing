@@ -43,7 +43,7 @@ v1.0.0 是 DanLing 的第一个可用版本，目标是提供稳定的本地 CLI
 | statusline | 可用 | 输出适合 shell prompt 或状态栏集成的单行状态 |
 | Textual TUI | 可选可用 | 需要安装 `danling[tui]`，提供全屏监控 TUI 和配置 TUI |
 | 配置管理 | 可用 | 支持 `danling init`、`danling config show`、`danling config tui` |
-| CSV 回放仿真 | 可用 | `danling simulate` 可按行回放 `results.csv`，便于演示训练过程 |
+| 训练日志回放仿真 | 可用 | `danling simulate` 可按行回放 CSV 或 TensorBoard scalar，便于演示训练过程 |
 
 ### 当前限制
 
@@ -149,7 +149,13 @@ pip install "danling[tui]"
 danling simulate logs/ultralytics/results.csv logs/run --interval 0 --max-rows 20
 ```
 
-`logs/run` 会自动生成，最终文件是 `logs/run/results.csv`。默认会覆盖目标文件；如果需要继续追加，使用 `--append`。
+TensorBoard event 也可以先回放成同样的 `results.csv`：
+
+```bash
+danling simulate logs/tensorboard logs/run --source tensorboard --interval 0 --max-rows 20
+```
+
+`logs/run` 会自动生成，最终文件是 `logs/run/results.csv`。默认会覆盖目标文件；如果需要继续追加，使用 `--append`。回放后的目录继续用 `--source csv` 监控。
 
 终端 A：
 
@@ -180,7 +186,7 @@ danling watch logs/run --source csv --config danling.yaml --no-hardware
 | `danling statusline PATH` | 输出适合 shell prompt 或状态栏的一行状态 |
 | `danling watch PATH` | 循环刷新 Rich 状态面板 |
 | `danling tui PATH` | 启动可选 Textual 全屏监控 TUI |
-| `danling simulate [SRC] [OUT]` | 按行回放 `results.csv` 到目标目录或 CSV 文件 |
+| `danling simulate [SRC] [OUT]` | 按行回放 CSV/TensorBoard 训练日志到目标 `results.csv` |
 | `danling hardware` | 显示当前 GPU/NPU 硬件状态 |
 | `danling doctor [PATH]` | 无 PATH 时检查环境，有 PATH 时输出训练诊断 |
 | `danling init` | 在当前目录创建 `danling.yaml` |
@@ -190,7 +196,7 @@ danling watch logs/run --source csv --config danling.yaml --no-hardware
 
 常用参数：
 
-- `--source auto/csv/tensorboard`：选择数据源，默认 `auto`
+- `--source auto/csv/tensorboard`：选择数据源，监控/检查命令默认 `auto`，`simulate` 默认 `csv`
 - `--config PATH`：指定配置文件
 - `--json`：输出 JSON
 - `--no-hardware`：跳过硬件读取
@@ -228,9 +234,12 @@ pip install "danling[tensorboard]"
 使用示例：
 
 ```bash
+danling inspect logs/tensorboard --source tensorboard --json
 danling inspect logs/tensorboard/train --source tensorboard --json
 danling inspect logs/tensorboard/train/events.out.tfevents.xxx --source tensorboard --json
 ```
+
+目录会递归查找 `events.out.tfevents.*`。常见的 `train/`、`val/` 子目录会作为指标上下文，用来区分裸的 `Loss/total` 等 scalar。
 
 ### 自动识别
 
@@ -279,7 +288,7 @@ sota_score: 0.80
 `danling config tui` 提供两个入口：
 
 - `1 手动配置`：编辑主指标、baseline/SOTA、境界阈值和刷新/诊断参数
-- `2 自动生成`：输入历史 Ultralytics `results.csv` 和关心指标，自动生成 `primary_score`、`baseline_score` 和 `sota_score`
+- `2 自动生成`：先选择 Ultralytics `results.csv` 或 TensorBoard event/logdir，再输入历史路径和关心指标，自动生成 `primary_score`、`baseline_score` 和 `sota_score`
 
 配置 TUI 的保存规则：
 

@@ -14,7 +14,7 @@ from danling.config import (
     load_config,
 )
 from danling.models import MetricSnapshot
-from danling.readers.ultralytics_csv import UltralyticsCSVReader
+from danling.readers.registry import read_history
 
 REALM_SEGMENT_COUNT = len(REALM_THRESHOLD_NAMES)
 TEXT_FIELD_IDS = ["pet_name", "primary_score", "primary_loss"]
@@ -30,6 +30,15 @@ CONFIG_FIELD_IDS = TEXT_FIELD_IDS + FLOAT_FIELD_IDS + INT_FIELD_IDS
 REALM_FIELD_PREFIX = "realm_threshold_"
 AUTO_RESULTS_PATH_ID = "auto-results-path"
 AUTO_METRIC_ID = "auto-metric"
+AUTO_SOURCE_MENU_ID = "auto-source-menu"
+AUTO_FORM_ID = "auto-form"
+AUTO_PREVIEW_WRAP_ID = "auto-preview-wrap"
+AUTO_PATH_LABEL_ID = "auto-path-label"
+AUTO_HELP_ID = "auto-help"
+AUTO_SOURCE_LABELS = {
+    "csv": "Ultralytics results.csv",
+    "tensorboard": "TensorBoard event/logdir",
+}
 
 
 def realm_field_id(name: str) -> str:
@@ -183,18 +192,30 @@ def render_realm_preview(values: Mapping[str, str]) -> str:
     return _render_threshold_ranges(thresholds)
 
 
-def suggest_config_from_results(path: str | Path, metric_name: str) -> dict[str, str]:
-    """从历史 Ultralytics results.csv 生成主指标、baseline 和 SOTA 建议。"""
+def suggest_config_from_results(
+    path: str | Path, metric_name: str, source: str = "csv"
+) -> dict[str, str]:
+    """从历史训练日志生成主指标、baseline 和 SOTA 建议。"""
     result_path = str(path).strip()
     if not result_path:
-        raise ValueError("历史 results.csv 路径不能为空")
+        raise ValueError("历史路径不能为空")
     metric = metric_name.strip()
     if not metric:
         raise ValueError("关心指标不能为空")
 
-    history = UltralyticsCSVReader().read_history(result_path)
+    normalized_source = "csv" if source == "ultralytics" else source
+    if normalized_source not in {"csv", "tensorboard", "auto"}:
+        raise ValueError(f"不支持的数据源: {source}")
+
+    try:
+        history = read_history(result_path, source=normalized_source)
+    except RuntimeError:
+        raise
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
     if not history:
-        raise ValueError("未读取到 Ultralytics results.csv 历史结果")
+        source_label = AUTO_SOURCE_LABELS.get(normalized_source, normalized_source)
+        raise ValueError(f"未读取到 {source_label} 历史结果")
 
     values = [
         value
@@ -288,6 +309,22 @@ def create_config_app(config_path: Path | None = None):
             height: auto;
         }
 
+        #auto-source-menu {
+            padding: 2 4;
+            height: 1fr;
+        }
+
+        #auto-source-panel {
+            border: round #16d9c5;
+            padding: 2 3;
+            background: #0b1720;
+            height: auto;
+        }
+
+        #auto-form {
+            height: 1fr;
+        }
+
         #config-left, #auto-left {
             width: 54%;
             padding: 1 2;
@@ -318,6 +355,7 @@ def create_config_app(config_path: Path | None = None):
         def __init__(self) -> None:
             super().__init__()
             self.mode = "home"
+            self.auto_source = "csv"
 
         def compose(self) -> ComposeResult:
             yield Header()
@@ -335,7 +373,8 @@ def create_config_app(config_path: Path | None = None):
                             "   编辑 pet_name、主指标、baseline/SOTA 和境界阈值。",
                             "",
                             "2. 自动生成",
-                            "   输入历史 Ultralytics results.csv 路径和关心指标，",
+                            "   先选择 Ultralytics results.csv 或 TensorBoard，",
+                            "   再输入历史路径和关心指标，",
                             "   自动使用 20% 位置结果作为 baseline，历史最佳作为 SOTA。",
                             "",
                             "按 1 或 2 进入子菜单；按 Esc 回到主页。",
@@ -353,26 +392,44 @@ def create_config_app(config_path: Path | None = None):
                         )
                 with Vertical(id="config-right"):
                     yield Static(render_realm_preview(initial_values), id="config-preview")
-            with Horizontal(id="config-auto"):
-                with VerticalScroll(id="auto-left"):
-                    yield Label("历史 results.csv 路径（目前支持 Ultralytics）")
-                    yield Input(
-                        value="",
-                        placeholder="例如 logs/run/results.csv",
-                        id=AUTO_RESULTS_PATH_ID,
-                    )
-                    yield Label("关心指标")
-                    yield Input(
-                        value=initial_values.get("primary_score", "") or "mAP50",
-                        placeholder="例如 mAP50 / mAP50-95 / precision",
-                        id=AUTO_METRIC_ID,
-                    )
-                    yield Static("按 Ctrl+G 自动生成，按 Ctrl+S 保存。")
-                with Vertical(id="auto-right"):
+            with Vertical(id="config-auto"):
+                with Vertical(id=AUTO_SOURCE_MENU_ID):
                     yield Static(
-                        "自动生成预览\n\n输入历史 results.csv 路径和关心指标后，按 Ctrl+G。",
-                        id="auto-preview",
+                        "\n".join(
+                            [
+                                "自动生成数据源",
+                                "",
+                                "1. Ultralytics results.csv",
+                                "   读取训练目录或 results.csv 文件。",
+                                "",
+                                "2. TensorBoard event/logdir",
+                                "   读取 events.out.tfevents.* 文件或日志目录。",
+                                "",
+                                "按 1 或 2 选择数据源；按 Esc 回到主页。",
+                            ]
+                        ),
+                        id="auto-source-panel",
                     )
+                with Horizontal(id=AUTO_FORM_ID):
+                    with VerticalScroll(id="auto-left"):
+                        yield Label("历史路径", id=AUTO_PATH_LABEL_ID)
+                        yield Input(
+                            value="",
+                            placeholder="例如 logs/run/results.csv",
+                            id=AUTO_RESULTS_PATH_ID,
+                        )
+                        yield Label("关心指标")
+                        yield Input(
+                            value=initial_values.get("primary_score", "") or "mAP50",
+                            placeholder="例如 mAP50 / mAP50-95 / precision",
+                            id=AUTO_METRIC_ID,
+                        )
+                        yield Static("按 Ctrl+G 自动生成，按 Ctrl+S 保存。", id=AUTO_HELP_ID)
+                    with Vertical(id=AUTO_PREVIEW_WRAP_ID):
+                        yield Static(
+                            "自动生成预览\n\n选择数据源后输入历史路径和关心指标，按 Ctrl+G。",
+                            id="auto-preview",
+                        )
             yield Footer()
 
         def on_mount(self) -> None:
@@ -398,21 +455,31 @@ def create_config_app(config_path: Path | None = None):
             self._show_screen("home")
 
         def action_manual(self) -> None:
+            if self.mode == "auto-menu":
+                self._select_auto_source("csv")
+                return
             self._show_screen("manual")
 
         def action_auto(self) -> None:
-            self._show_screen("auto")
+            if self.mode == "auto-menu":
+                self._select_auto_source("tensorboard")
+                return
+            self._show_screen("auto-menu")
 
         def action_generate(self) -> None:
-            if self.mode != "auto":
+            if self.mode != "auto-form":
                 return
             message = self.query_one("#config-message", Static)
             auto_preview = self.query_one("#auto-preview", Static)
             path_value = self.query_one(f"#{AUTO_RESULTS_PATH_ID}", Input).value.strip()
             metric_value = self.query_one(f"#{AUTO_METRIC_ID}", Input).value.strip()
             try:
-                suggested = suggest_config_from_results(path_value, metric_value)
-            except ValueError as exc:
+                suggested = suggest_config_from_results(
+                    path_value,
+                    metric_value,
+                    source=self.auto_source,
+                )
+            except (RuntimeError, ValueError) as exc:
                 message.update(f"自动生成失败: {exc}")
                 auto_preview.update(f"自动生成预览\n\n输入错误: {exc}")
                 return
@@ -428,7 +495,8 @@ def create_config_app(config_path: Path | None = None):
                 "\n".join(
                     [
                         "自动生成预览",
-                        f"结果文件: {path_value}",
+                        f"数据源: {AUTO_SOURCE_LABELS[self.auto_source]}",
+                        f"历史路径: {path_value}",
                         f"关心指标: {suggested['primary_score']}",
                         f"baseline_score: {suggested['baseline_score']}",
                         f"sota_score: {suggested['sota_score']}",
@@ -437,6 +505,35 @@ def create_config_app(config_path: Path | None = None):
                     ]
                 )
             )
+
+        def _select_auto_source(self, source: str) -> None:
+            self.auto_source = source
+            source_label = AUTO_SOURCE_LABELS[source]
+            path_label = self.query_one(f"#{AUTO_PATH_LABEL_ID}", Label)
+            path_input = self.query_one(f"#{AUTO_RESULTS_PATH_ID}", Input)
+            help_text = self.query_one(f"#{AUTO_HELP_ID}", Static)
+            preview = self.query_one("#auto-preview", Static)
+
+            if source == "tensorboard":
+                path_label.update("TensorBoard event/logdir 路径")
+                path_input.placeholder = "例如 logs/tensorboard 或 logs/tensorboard/train"
+                help_text.update("按 Ctrl+G 自动生成；需要安装 danling[tensorboard]。")
+            else:
+                path_label.update("Ultralytics results.csv 路径")
+                path_input.placeholder = "例如 logs/run/results.csv 或 runs/detect/train"
+                help_text.update("按 Ctrl+G 自动生成，按 Ctrl+S 保存。")
+
+            preview.update(
+                "\n".join(
+                    [
+                        "自动生成预览",
+                        f"数据源: {source_label}",
+                        "",
+                        "输入历史路径和关心指标后，按 Ctrl+G。",
+                    ]
+                )
+            )
+            self._show_screen("auto-form")
 
         def _form_values(self) -> dict[str, str]:
             return {
@@ -452,7 +549,9 @@ def create_config_app(config_path: Path | None = None):
             self.mode = mode
             self.query_one("#config-home").display = mode == "home"
             self.query_one("#config-manual").display = mode == "manual"
-            self.query_one("#config-auto").display = mode == "auto"
+            self.query_one("#config-auto").display = mode in {"auto-menu", "auto-form"}
+            self.query_one(f"#{AUTO_SOURCE_MENU_ID}").display = mode == "auto-menu"
+            self.query_one(f"#{AUTO_FORM_ID}").display = mode == "auto-form"
             message = self.query_one("#config-message", Static)
             if mode == "home":
                 message.update(f"config: {target_path} | 1 手动配置 | 2 自动生成 | q 退出")
@@ -461,9 +560,15 @@ def create_config_app(config_path: Path | None = None):
                     f"config: {target_path} | Ctrl+S 保存 | Esc 主页 | q 退出 | 手动配置"
                 )
                 self._update_preview()
+            elif mode == "auto-menu":
+                message.update(
+                    f"config: {target_path} | 1 Ultralytics results.csv | "
+                    "2 TensorBoard | Esc 主页"
+                )
             else:
                 message.update(
-                    f"config: {target_path} | Ctrl+G 生成 | Ctrl+S 保存 | Esc 主页 | 自动生成"
+                    f"config: {target_path} | {AUTO_SOURCE_LABELS[self.auto_source]} | "
+                    "Ctrl+G 生成 | Ctrl+S 保存 | Esc 主页"
                 )
 
     return DanLingConfigApp()

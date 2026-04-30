@@ -69,13 +69,13 @@ realm_thresholds:
 `danling config tui` 会先进入配置主页，提供两个子菜单：
 
 - `1 手动配置`：显示“左表单 + 右预览”。左侧编辑 `danling.yaml` 字段，右侧实时展示炼器期、筑基期、结丹期、元婴期、化神期的分段。
-- `2 自动生成`：输入历史 Ultralytics `results.csv` 路径和关心指标，按 `Ctrl+G` 自动生成 `primary_score`、`baseline_score` 和 `sota_score`。
+- `2 自动生成`：先选择 Ultralytics `results.csv` 或 TensorBoard event/logdir，再输入历史路径和关心指标，按 `Ctrl+G` 自动生成 `primary_score`、`baseline_score` 和 `sota_score`。
 
 - 五个 `realm_thresholds` 全留空时，右侧按 `baseline_score` 到 `sota_score` 自动等分。
 - 五个 `realm_thresholds` 全部填写时，右侧按手动阈值预览。
 - baseline/SOTA 和五个境界阈值都为空时可以保存，右侧提示“境界未启用”。
 
-自动生成规则：目前只支持 Ultralytics `results.csv`；`baseline_score` 取关心指标在历史顺序 20% 位置的结果，`sota_score` 取该指标历史最好结果。指标可以填 `mAP50`、`mAP50-95`、`precision`、`recall`，也可以填 CSV 原始列名。
+自动生成规则：`baseline_score` 取关心指标在历史顺序 20% 位置的结果，`sota_score` 取该指标历史最好结果。指标可以填 `mAP50`、`mAP50-95`、`precision`、`recall`，也可以填 CSV 原始列名或 TensorBoard scalar 映射出的指标名。
 
 保存前会阻止这些输入：
 

@@ -18,12 +18,14 @@ danling inspect runs/detect/train --source csv --json
 
 ```bash
 pip install "danling[tensorboard]"
+danling inspect logs/tensorboard --source tensorboard --json
 danling inspect logs/tensorboard/train --source tensorboard --json
 ```
+
+它会递归查找 `events.out.tfevents.*`，并用 `train/`、`val/` 这样的子目录名给裸 scalar tag 补充上下文。
 
 未安装依赖时，只有 TensorBoard 读取会提示安装 extra，其他功能不受影响。
 
 ## Registry
 
 `ReaderRegistry` 支持 `auto`、`csv`、`tensorboard`。`auto` 按 CSV、TensorBoard 的顺序检测。
-
