@@ -6,6 +6,16 @@ DanLing 是一个面向深度学习训练过程的 Python CLI/TUI 工具。它�
 
 DanLing 不替代 TensorBoard、W&B、MLflow、Aim 或 ClearML。它定位为轻量的**状态解释层**和**终端呈现层**，适合放在训练终端、SSH 会话、shell statusline、Claude Code status line 或本地演示流程中使用。
 
+## 界面预览
+
+### 全屏监控 TUI
+
+![DanLing 全屏监控 TUI](assert/main.png)
+
+### 配置 TUI
+
+![DanLing 配置 TUI](assert/config.png)
+
 ## 许可与使用边界
 
 本项目源代码公开，但当前采用 [CC BY-NC-ND 4.0](LICENSE)（署名-非商业性使用-禁止演绎 4.0 国际）许可，**不允许商业使用**，也**不允许对外分发修改后的版本**。
