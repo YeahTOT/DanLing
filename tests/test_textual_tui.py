@@ -99,6 +99,32 @@ def test_pet_animation_frame_differs_by_mood() -> None:
     assert "failed" in failed
 
 
+def test_pet_animation_frame_changes_by_realm_without_losing_mood() -> None:
+    base_realm = CultivationRealm(name="炼器期", rank=1)
+    top_realm = CultivationRealm(name="化神期", rank=5)
+
+    base_frame = pet_animation_frame(PetMood.evolving, 0, base_realm)
+    top_frame = pet_animation_frame(PetMood.evolving, 0, top_realm)
+
+    assert base_frame != top_frame
+    assert "evolving" in base_frame
+    assert "evolving" in top_frame
+    assert "炼器纹" in base_frame
+    assert "化神纹" in top_frame
+
+
+def test_render_tui_pet_uses_realm_art() -> None:
+    state = DanLingState(
+        pet_mood=PetMood.happy,
+        realm=CultivationRealm(name="结丹期", rank=3, progress=0.5),
+    )
+
+    text = render_tui_pet(state)
+
+    assert "结丹纹" in text
+    assert "境界: 结丹期" in text
+
+
 def test_furnace_animation_frame_changes_by_state() -> None:
     burning = furnace_animation_frame(FurnaceState.burning, 0)
     smoking = furnace_animation_frame(FurnaceState.smoking, 0)

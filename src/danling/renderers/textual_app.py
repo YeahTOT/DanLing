@@ -9,7 +9,7 @@ from pathlib import Path
 from danling.config import load_config
 from danling.engine.state import build_state
 from danling.hardware import read_all_hardware
-from danling.models import DanLingState, FurnaceState, PetMood
+from danling.models import CultivationRealm, DanLingState, FurnaceState, PetMood
 from danling.readers.registry import read_history
 
 ANIMATION_INTERVAL = 0.25
@@ -139,6 +139,22 @@ DanLing failed
    /|...|\
 """,
     ],
+}
+
+REALM_SIGILS: dict[str, tuple[str, str]] = {
+    "炼器期": ("炼器纹", "   .-^-._"),
+    "筑基期": ("筑基纹", "  _/===\\_"),
+    "结丹期": ("结丹纹", "  --(丹)--"),
+    "元婴期": ("元婴纹", "  <(元婴)>"),
+    "化神期": ("化神纹", "  *\\|法|/*"),
+}
+
+REALM_SIGIL_BY_RANK: dict[int, tuple[str, str]] = {
+    1: REALM_SIGILS["炼器期"],
+    2: REALM_SIGILS["筑基期"],
+    3: REALM_SIGILS["结丹期"],
+    4: REALM_SIGILS["元婴期"],
+    5: REALM_SIGILS["化神期"],
 }
 
 FURNACE_FRAMES: dict[str, list[str]] = {
@@ -460,11 +476,27 @@ def create_app(
     return DanLingTUIApp()
 
 
-def pet_animation_frame(mood: PetMood | str, frame_index: int) -> str:
+def pet_animation_frame(
+    mood: PetMood | str, frame_index: int, realm: CultivationRealm | None = None
+) -> str:
     """返回宠物动画帧。"""
     mood_value = _enum_value(mood)
     frames = PET_FRAMES.get(mood_value, PET_FRAMES["normal"])
-    return frames[frame_index % len(frames)].strip()
+    frame = frames[frame_index % len(frames)].strip()
+    if realm is None:
+        return frame
+    return _apply_realm_sigil(frame, realm)
+
+
+def _apply_realm_sigil(frame: str, realm: CultivationRealm) -> str:
+    label, pattern = _realm_sigil(realm)
+    return "\n".join([frame, f"  {pattern}  {label}"])
+
+
+def _realm_sigil(realm: CultivationRealm) -> tuple[str, str]:
+    return REALM_SIGILS.get(realm.name) or REALM_SIGIL_BY_RANK.get(
+        realm.rank, REALM_SIGILS["炼器期"]
+    )
 
 
 def furnace_animation_frame(state: FurnaceState | str, frame_index: int) -> str:
@@ -524,7 +556,7 @@ def render_tui_pet(state: DanLingState, frame_index: int = 0) -> str:
     """渲染宠物文字图案和当前境界。"""
     return "\n".join(
         [
-            pet_animation_frame(state.pet_mood, frame_index),
+            pet_animation_frame(state.pet_mood, frame_index, state.realm),
             "",
             f"境界: {state.realm.name}",
             f"境界进度: {_fmt_realm_progress(state.realm.progress)}",
