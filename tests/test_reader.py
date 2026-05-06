@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from danling.cli import app
 from danling.readers.ultralytics_csv import UltralyticsCSVReader
+from danling.readers.ultralytics_log import UltralyticsLogReader
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "ultralytics_run"
 runner = CliRunner()
@@ -139,3 +140,83 @@ class TestInspectCLI:
         """inspect 无 results.csv 的路径应返回错误。"""
         result = runner.invoke(app, ["inspect", "/tmp/nonexistent", "--json"])
         assert result.exit_code != 0
+
+
+class TestUltralyticsLogReader:
+    """Ultralytics 官方控制台日志 Reader 单元测试。"""
+
+    def test_reads_official_console_log_output(self, tmp_path) -> None:
+        log_path = tmp_path / "train.log"
+        log_path.write_text(
+            "\n".join(
+                [
+                    "      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size",
+                    "      1/100      22.7G      1.411      1.365   0.007033"
+                    "          7        960: 100% 3709/3709 1.1s/it 1:09:38",
+                    "                 Class     Images  Instances      Box(P"
+                    "          R      mAP50  mAP50-95): 100% 636/636 1.9it/s 5:31",
+                    "                   all      40647      81710      0.859"
+                    "      0.657      0.718      0.532",
+                    "",
+                    "      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size",
+                    "      2/100      22.4G      1.451      1.335   0.006962"
+                    "         29        960: 100% 3709/3709 1.0s/it 1:04:47",
+                    "                 Class     Images  Instances      Box(P"
+                    "          R      mAP50  mAP50-95): 100% 636/636 1.6it/s 6:35",
+                    "                   all      40647      81710      0.868"
+                    "      0.657      0.719      0.529",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        history = UltralyticsLogReader().read_history(str(log_path))
+
+        assert len(history) == 2
+        latest = history[-1]
+        assert latest.source == "ultralytics-log"
+        assert latest.epoch == 2
+        assert latest.raw["total_epochs"] == 100
+        assert latest.raw["GPU_mem"] == "22.4G"
+        assert latest.train_loss is not None
+        assert abs(latest.train_loss - 2.792962) < 0.000001
+        assert latest.precision == 0.868
+        assert latest.recall == 0.657
+        assert latest.map50 == 0.719
+        assert latest.map5095 == 0.529
+        assert latest.score == 0.719
+        assert latest.score_name == "mAP50"
+
+    def test_keeps_in_progress_epoch_without_validation_row(self, tmp_path) -> None:
+        log_path = tmp_path / "nohup.out"
+        log_path.write_text(
+            "\n".join(
+                [
+                    "      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size",
+                    "      5/100      22.4G      1.524      1.415   0.006991"
+                    "        176        960: 83% 3067/3709 1.0it/s 50:20<10:16",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        latest = UltralyticsLogReader().read_latest(str(log_path))
+
+        assert latest is not None
+        assert latest.epoch == 5
+        assert latest.train_loss is not None
+        assert latest.map50 is None
+
+    def test_detects_log_inside_directory(self, tmp_path) -> None:
+        log_path = tmp_path / "train.log"
+        log_path.write_text(
+            "\n".join(
+                [
+                    "Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size",
+                    "1/10 1.0G 1.0 2.0 3.0 4 640: 100% 1/1",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        assert UltralyticsLogReader.detect(str(tmp_path)) is True

@@ -37,6 +37,7 @@ AUTO_PATH_LABEL_ID = "auto-path-label"
 AUTO_HELP_ID = "auto-help"
 AUTO_SOURCE_LABELS = {
     "csv": "Ultralytics results.csv",
+    "ultralytics-log": "Ultralytics log/txt",
     "tensorboard": "TensorBoard event/logdir",
 }
 
@@ -204,7 +205,9 @@ def suggest_config_from_results(
         raise ValueError("关心指标不能为空")
 
     normalized_source = "csv" if source == "ultralytics" else source
-    if normalized_source not in {"csv", "tensorboard", "auto"}:
+    if normalized_source in {"log", "txt", "ultralytics_log"}:
+        normalized_source = "ultralytics-log"
+    if normalized_source not in {"csv", "ultralytics-log", "tensorboard", "auto"}:
         raise ValueError(f"不支持的数据源: {source}")
 
     try:
@@ -283,6 +286,7 @@ def create_config_app(config_path: Path | None = None):
         BINDINGS = [
             ("1", "manual", "手动配置"),
             ("2", "auto", "自动生成"),
+            ("3", "tensorboard", "TensorBoard"),
             ("escape", "home", "主页"),
             ("ctrl+g", "generate", "生成"),
             ("ctrl+s", "save", "保存"),
@@ -373,7 +377,7 @@ def create_config_app(config_path: Path | None = None):
                             "   编辑 pet_name、主指标、baseline/SOTA 和境界阈值。",
                             "",
                             "2. 自动生成",
-                            "   先选择 Ultralytics results.csv 或 TensorBoard，",
+                            "   先选择 results.csv、官方日志输出或 TensorBoard，",
                             "   再输入历史路径和关心指标，",
                             "   自动使用 20% 位置结果作为 baseline，历史最佳作为 SOTA。",
                             "",
@@ -402,10 +406,13 @@ def create_config_app(config_path: Path | None = None):
                                 "1. Ultralytics results.csv",
                                 "   读取训练目录或 results.csv 文件。",
                                 "",
-                                "2. TensorBoard event/logdir",
+                                "2. Ultralytics log/txt",
+                                "   读取后台进程重定向保存的官方训练输出。",
+                                "",
+                                "3. TensorBoard event/logdir",
                                 "   读取 events.out.tfevents.* 文件或日志目录。",
                                 "",
-                                "按 1 或 2 选择数据源；按 Esc 回到主页。",
+                                "按 1/2/3 选择数据源；按 Esc 回到主页。",
                             ]
                         ),
                         id="auto-source-panel",
@@ -462,9 +469,13 @@ def create_config_app(config_path: Path | None = None):
 
         def action_auto(self) -> None:
             if self.mode == "auto-menu":
-                self._select_auto_source("tensorboard")
+                self._select_auto_source("ultralytics-log")
                 return
             self._show_screen("auto-menu")
+
+        def action_tensorboard(self) -> None:
+            if self.mode == "auto-menu":
+                self._select_auto_source("tensorboard")
 
         def action_generate(self) -> None:
             if self.mode != "auto-form":
@@ -518,6 +529,10 @@ def create_config_app(config_path: Path | None = None):
                 path_label.update("TensorBoard event/logdir 路径")
                 path_input.placeholder = "例如 logs/tensorboard 或 logs/tensorboard/train"
                 help_text.update("按 Ctrl+G 自动生成；需要安装 danling[tensorboard]。")
+            elif source == "ultralytics-log":
+                path_label.update("Ultralytics log/txt 路径")
+                path_input.placeholder = "例如 runs/detect/train/train.log 或 nohup.out"
+                help_text.update("按 Ctrl+G 自动生成，支持后台进程输出到 .log/.txt。")
             else:
                 path_label.update("Ultralytics results.csv 路径")
                 path_input.placeholder = "例如 logs/run/results.csv 或 runs/detect/train"
@@ -563,7 +578,7 @@ def create_config_app(config_path: Path | None = None):
             elif mode == "auto-menu":
                 message.update(
                     f"config: {target_path} | 1 Ultralytics results.csv | "
-                    "2 TensorBoard | Esc 主页"
+                    "2 Ultralytics log/txt | 3 TensorBoard | Esc 主页"
                 )
             else:
                 message.update(

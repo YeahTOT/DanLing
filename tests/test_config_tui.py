@@ -247,6 +247,26 @@ def test_suggest_config_from_tensorboard_path_uses_reader_registry(
     assert values["sota_score"] == "0.5"
 
 
+def test_suggest_config_from_ultralytics_log_path_uses_reader_registry(tmp_path) -> None:
+    log_path = tmp_path / "train.log"
+    lines = ["Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size"]
+    for index in range(1, 6):
+        lines.extend(
+            [
+                f"{index}/10 1.0G 1.0 2.0 3.0 4 640: 100% 1/1",
+                "Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% 1/1",
+                f"all 10 20 0.{index + 4} 0.5 0.{index} 0.{index - 1}",
+            ]
+        )
+    log_path.write_text("\n".join(lines), encoding="utf-8")
+
+    values = suggest_config_from_results(log_path, "mAP50", source="ultralytics-log")
+
+    assert values["primary_score"] == "mAP50"
+    assert values["baseline_score"] == "0.1"
+    assert values["sota_score"] == "0.5"
+
+
 def test_suggest_config_rejects_unknown_auto_source(tmp_path) -> None:
     with pytest.raises(ValueError, match="不支持的数据源"):
         suggest_config_from_results(tmp_path, "mAP50", source="unknown")
@@ -338,7 +358,9 @@ def test_create_config_app_instantiates_when_textual_is_available(tmp_path) -> N
     assert app is not None
 
 
-def test_config_app_auto_menu_selects_tensorboard_when_textual_is_available(tmp_path) -> None:
+def test_config_app_auto_menu_selects_log_and_tensorboard_when_textual_is_available(
+    tmp_path,
+) -> None:
     try:
         import textual  # noqa: F401
     except ImportError:
@@ -351,6 +373,12 @@ def test_config_app_auto_menu_selects_tensorboard_when_textual_is_available(tmp_
             assert app.mode == "auto-menu"
 
             await pilot.press("2")
+            assert app.mode == "auto-form"
+            assert app.auto_source == "ultralytics-log"
+
+            await pilot.press("escape")
+            await pilot.press("2")
+            await pilot.press("3")
             assert app.mode == "auto-form"
             assert app.auto_source == "tensorboard"
 

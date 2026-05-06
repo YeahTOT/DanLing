@@ -39,6 +39,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 config_app = typer.Typer(help="配置文件工具")
+SOURCE_HELP = "数据源：auto/csv/ultralytics-log/tensorboard"
 
 
 class RemoteProfileGroup(typer.core.TyperGroup):
@@ -94,7 +95,7 @@ def main(
 @app.command()
 def inspect(
     path: Annotated[Path, typer.Argument(help="训练日志目录、CSV 文件或 TensorBoard event 路径")],
-    source: Annotated[str, typer.Option("--source", help="数据源：auto/csv/tensorboard")] = "auto",
+    source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     json_output: Annotated[bool, typer.Option("--json/--no-json", help="以 JSON 格式输出")] = False,
     debug: Annotated[bool, typer.Option("--debug", help="显示调试 traceback")] = False,
 ) -> None:
@@ -115,7 +116,7 @@ def inspect(
 @app.command()
 def state(
     path: Annotated[Path, typer.Argument(help="训练日志目录或文件路径")],
-    source: Annotated[str, typer.Option("--source", help="数据源：auto/csv/tensorboard")] = "auto",
+    source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     json_output: Annotated[bool, typer.Option("--json/--no-json", help="以 JSON 格式输出")] = False,
     no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,
@@ -135,7 +136,7 @@ def state(
 @app.command()
 def status(
     path: Annotated[Path, typer.Argument(help="训练日志目录或文件路径")],
-    source: Annotated[str, typer.Option("--source", help="数据源：auto/csv/tensorboard")] = "auto",
+    source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,
     no_save: Annotated[bool, typer.Option("--no-save", help="不更新本地状态")] = False,
@@ -151,7 +152,7 @@ def status(
 @app.command()
 def statusline(
     path: Annotated[Path, typer.Argument(help="训练日志目录或文件路径")],
-    source: Annotated[str, typer.Option("--source", help="数据源：auto/csv/tensorboard")] = "auto",
+    source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,
     no_save: Annotated[bool, typer.Option("--no-save", help="不更新本地状态")] = False,
@@ -167,7 +168,7 @@ def statusline(
 @app.command()
 def watch(
     path: Annotated[Path, typer.Argument(help="训练日志目录或文件路径")],
-    source: Annotated[str, typer.Option("--source", help="数据源：auto/csv/tensorboard")] = "auto",
+    source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     interval: Annotated[float | None, typer.Option("--interval", help="刷新间隔秒数")] = None,
     no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,
@@ -201,7 +202,7 @@ def simulate(
     ] = Path("logs/run"),
     source: Annotated[
         str,
-        typer.Option("--source", help="数据源：auto/csv/tensorboard"),
+        typer.Option("--source", help=SOURCE_HELP),
     ] = "csv",
     interval: Annotated[float, typer.Option("--interval", help="每行写入间隔秒数")] = 2.0,
     max_rows: Annotated[int | None, typer.Option("--max-rows", help="最多回放行数")] = None,
@@ -264,7 +265,7 @@ def hardware(
 @app.command()
 def doctor(
     path: Annotated[Path | None, typer.Argument(help="可选训练日志路径")] = None,
-    source: Annotated[str, typer.Option("--source", help="数据源：auto/csv/tensorboard")] = "auto",
+    source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     json_output: Annotated[bool, typer.Option("--json/--no-json", help="以 JSON 格式输出")] = False,
     no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,
@@ -345,7 +346,7 @@ def config_tui(
 @app.command()
 def tui(
     path: Annotated[Path, typer.Argument(help="训练日志目录或文件路径")],
-    source: Annotated[str, typer.Option("--source", help="数据源：auto/csv/tensorboard")] = "auto",
+    source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     interval: Annotated[float, typer.Option("--interval", help="刷新间隔秒数")] = 2.0,
     no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,

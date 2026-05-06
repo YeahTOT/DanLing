@@ -22,7 +22,7 @@ DanLing 是一个轻量的 Python CLI/TUI 工具。它读取训练日志和 GPU/
 
 | 功能 | 说明 |
 | --- | --- |
-| 训练日志读取 | 支持 Ultralytics `results.csv`，可选支持 TensorBoard event |
+| 训练日志读取 | 支持 Ultralytics `results.csv`、官方控制台 `.log/.txt`，可选支持 TensorBoard event |
 | 状态解释 | 判断训练是否正常、变好、停滞、日志停更或出现 loss 异常 |
 | 修炼境界 | 用 baseline/SOTA 或手动阈值，把指标映射到五个境界 |
 | 诊断建议 | 提示 NaN/inf、loss 爆炸、长期无提升、显存风险、checkpoint 缺失等问题 |
@@ -94,7 +94,7 @@ v1.1.0 在本地 CLI/TUI 闭环基础上加入 SSH 远程可视化：可以通�
 
 | 类别 | v1.1.0 状态 |
 | --- | --- |
-| 数据源 | Ultralytics CSV 可用；TensorBoard event 可选可用 |
+| 数据源 | Ultralytics CSV 和官方 log/txt 可用；TensorBoard event 可选可用 |
 | 展示方式 | Rich 面板、watch、statusline、Textual TUI 可用 |
 | 配置能力 | `danling init`、`danling config show`、`danling config tui` 可用 |
 | 诊断能力 | NaN/inf、loss 爆炸、无提升、日志停更、显存风险、低利用率、checkpoint 缺失 |
@@ -110,7 +110,7 @@ v1.1.0 在本地 CLI/TUI 闭环基础上加入 SSH 远程可视化：可以通�
 | [Getting Started](docs/getting-started.md) | 更完整的示例 run、配置和监控流程 |
 | [Commands](docs/commands.md) | 命令表和常用参数 |
 | [Configuration](docs/configuration.md) | `danling.yaml`、境界阈值和配置 TUI |
-| [Readers](docs/readers.md) | CSV / TensorBoard 数据源说明 |
+| [Readers](docs/readers.md) | CSV / Ultralytics log/txt / TensorBoard 数据源说明 |
 | [State Model](docs/state-model.md) | 宠物情绪、修炼境界、炼丹炉状态和本地状态 |
 | [Diagnostics](docs/diagnostics.md) | 诊断项和 `danling doctor` |
 | [Hardware](docs/hardware.md) | NVIDIA / Ascend 硬件读取和降级策略 |

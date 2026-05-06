@@ -10,7 +10,7 @@ danling status examples/ultralytics_run --no-hardware
 danling statusline examples/ultralytics_run --no-hardware
 ```
 
-如果你的训练目录里包含 `results.csv`，`--source auto` 会自动识别。遇到不支持的数据源时，DanLing 会提示期望的文件类型，而不是输出难懂 traceback。
+如果你的训练目录里包含 `results.csv`，或包含 Ultralytics 官方输出保存的 `.log/.txt`，`--source auto` 会自动识别。遇到不支持的数据源时，DanLing 会提示期望的文件类型，而不是输出难懂 traceback。
 
 ## 2. 配置境界
 

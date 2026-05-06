@@ -8,6 +8,7 @@ from danling.models import MetricSnapshot
 from danling.readers.base import BaseReader
 from danling.readers.tensorboard_reader import TensorBoardReader
 from danling.readers.ultralytics_csv import UltralyticsCSVReader
+from danling.readers.ultralytics_log import UltralyticsLogReader
 
 
 class ReaderRegistry:
@@ -20,6 +21,7 @@ class ReaderRegistry:
     def default(cls) -> ReaderRegistry:
         registry = cls()
         registry.register(UltralyticsCSVReader())
+        registry.register(UltralyticsLogReader())
         registry.register(TensorBoardReader())
         return registry
 
@@ -55,7 +57,7 @@ class ReaderRegistry:
             if source == "auto":
                 raise ValueError(
                     "No supported training log found. "
-                    "Expected results.csv or TensorBoard event files."
+                    "Expected results.csv, Ultralytics log/txt, or TensorBoard event files."
                 )
             raise ValueError(f"Unsupported source: {source}")
         return reader.read_history(path, limit=limit)
@@ -73,4 +75,6 @@ def read_latest(path: str, source: str = "auto") -> MetricSnapshot | None:
 def _normalize_source(source: str) -> str:
     if source == "ultralytics":
         return "csv"
+    if source in {"log", "txt", "ultralytics_log", "ultralytics-log"}:
+        return "ultralytics-log"
     return source

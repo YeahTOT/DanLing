@@ -12,6 +12,18 @@ danling inspect runs/detect/train --source csv --json
 
 它会宽松处理表头空格、缺失列和常见 YOLO 指标名。
 
+## Ultralytics Log/TXT
+
+`UltralyticsLogReader` 支持读取官方训练控制台输出保存成的 `.log`、`.txt` 或 `nohup.out`：
+
+```bash
+python train.py > train.log 2>&1
+danling inspect train.log --source ultralytics-log --json
+danling inspect runs/detect/train --source auto --json
+```
+
+它会解析 `Epoch GPU_mem box_loss cls_loss dfl_loss ...` 训练行，以及随后 `all ... Box(P R mAP50 mAP50-95)` 的验证汇总行。训练中的最后一个 epoch 即使还没有验证汇总，也会保留 loss 快照，方便读取后台进程正在写入的日志。
+
 ## TensorBoard
 
 `TensorBoardReader` 是可选能力：
@@ -28,7 +40,7 @@ danling inspect logs/tensorboard/train --source tensorboard --json
 
 ## Registry
 
-`ReaderRegistry` 支持 `auto`、`csv`、`tensorboard`。`auto` 按 CSV、TensorBoard 的顺序检测。
+`ReaderRegistry` 支持 `auto`、`csv`、`ultralytics-log`、`tensorboard`。`auto` 按 CSV、Ultralytics log/txt、TensorBoard 的顺序检测。
 
 ## Remote SSH
 

@@ -25,6 +25,24 @@ def test_read_history_source_csv_and_auto() -> None:
     assert len(read_history(str(FIXTURE_DIR), source="auto")) == 5
 
 
+def test_read_history_source_ultralytics_log_alias(tmp_path) -> None:
+    log_path = tmp_path / "train.txt"
+    log_path.write_text(
+        "\n".join(
+            [
+                "Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size",
+                "1/10 1.0G 1.0 2.0 3.0 4 640: 100% 1/1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    history = read_history(str(log_path), source="log")
+
+    assert len(history) == 1
+    assert history[0].source == "ultralytics-log"
+
+
 def test_unknown_source_has_friendly_error() -> None:
     with pytest.raises(ValueError, match="Unsupported source"):
         read_history(str(FIXTURE_DIR), source="unknown")
