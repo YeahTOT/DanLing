@@ -41,7 +41,7 @@ def test_config_defaults_cover_engine_fields() -> None:
     assert config.pet_name == "DanLing"
     assert config.loss_window == 5
     assert config.no_improve_patience == 10
-    assert config.stale_seconds == 300
+    assert config.stale_seconds == 3600
     assert config.high_memory_ratio == 0.90
     assert config.hot_util_percent == 90.0
     assert config.watch_interval == 2.0

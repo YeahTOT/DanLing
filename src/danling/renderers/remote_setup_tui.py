@@ -28,6 +28,7 @@ class RemoteSetupValues:
     identity: str = ""
     port: str = ""
     sync_timeout: str = "10"
+    config_path: str = ""
 
 
 def default_identity_path() -> Path:
@@ -148,6 +149,7 @@ def save_remote_setup_values(
         port=_parse_int(values.port),
         source="csv",
         sync_timeout=_parse_float(values.sync_timeout) or 10.0,
+        config_path=values.config_path.strip() or None,
     )
     return save_remote_profile(profile, store=store)
 
@@ -170,6 +172,7 @@ def create_remote_setup_app(profile_name: str = "default"):
         "remote_path": "remote-path",
         "identity": "remote-identity",
         "sync_timeout": "remote-sync-timeout",
+        "config_path": "remote-config-path",
     }
     default_values = RemoteSetupValues(
         name=profile_name,
@@ -241,6 +244,8 @@ def create_remote_setup_app(profile_name: str = "default"):
                     yield Input(value=default_values.identity, id=field_ids["identity"])
                     yield Label("同步超时秒数")
                     yield Input(value=default_values.sync_timeout, id=field_ids["sync_timeout"])
+                    yield Label("配置文件路径（可留空，如 ./danling.yaml）")
+                    yield Input(value=default_values.config_path, id=field_ids["config_path"])
                 with Vertical(id="remote-right"):
                     yield Static(_help_text(default_values), id="remote-help")
             yield Footer()
@@ -310,6 +315,7 @@ def create_remote_setup_app(profile_name: str = "default"):
                 remote_path=self.query_one(f"#{field_ids['remote_path']}", Input).value,
                 identity=self.query_one(f"#{field_ids['identity']}", Input).value,
                 sync_timeout=self.query_one(f"#{field_ids['sync_timeout']}", Input).value,
+                config_path=self.query_one(f"#{field_ids['config_path']}", Input).value,
             )
 
     return RemoteSetupApp()

@@ -172,8 +172,8 @@ def test_remote_status_uses_saved_remote_profile(monkeypatch, tmp_path) -> None:
         app,
         [
             "remote",
-            "status",
             "lab",
+            "status",
             "--ssh-option",
             "StrictHostKeyChecking=no",
             "--sync-timeout",
@@ -198,7 +198,7 @@ def test_remote_status_without_profile_shows_setup_hint(monkeypatch) -> None:
 
     monkeypatch.setattr("danling.cli.load_remote_profile", raise_missing)
 
-    result = runner.invoke(app, ["remote", "status", "missing"])
+    result = runner.invoke(app, ["remote", "missing", "status"])
 
     assert result.exit_code == 1
     assert "danling remote setup missing" in result.stderr
@@ -231,7 +231,7 @@ def test_remote_hardware_renders_saved_profile_gpu(monkeypatch, tmp_path) -> Non
     monkeypatch.setattr("danling.cli.load_remote_profile", lambda name: profile)
     monkeypatch.setattr("danling.cli.read_remote_nvidia_hardware", fake_read_hardware)
 
-    result = runner.invoke(app, ["remote", "hardware", "lab"])
+    result = runner.invoke(app, ["remote", "lab", "hardware"])
 
     assert result.exit_code == 0
     assert "RTX 4090" in result.stdout

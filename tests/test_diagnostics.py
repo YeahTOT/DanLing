@@ -55,7 +55,7 @@ def test_no_improvement_diagnostic() -> None:
 
 
 def test_stale_log_diagnostic() -> None:
-    assert "STALE_LOG" in codes([metric(train_loss=1.0, timestamp=-200)])
+    assert "STALE_LOG" in codes([metric(train_loss=1.0, timestamp=-4000)])
 
 
 def test_memory_and_low_utilization_diagnostics() -> None:

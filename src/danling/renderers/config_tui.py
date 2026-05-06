@@ -59,7 +59,7 @@ CONFIG_FORM_ROWS = [
     ("watch_interval", "刷新间隔秒"),
     ("loss_window", "loss 窗口"),
     ("no_improve_patience", "无提升耐心"),
-    ("stale_seconds", "日志休眠秒数"),
+    ("stale_seconds", "日志过期时间（秒），默认1h"),
 ]
 
 

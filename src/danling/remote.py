@@ -59,6 +59,7 @@ class RemoteProfile:
     remote_hardware: bool = True
     sync_timeout: float = 10.0
     ssh_options: tuple[str, ...] = ()
+    config_path: str | None = None
 
     def to_options(
         self,
@@ -93,6 +94,7 @@ class RemoteProfile:
             remote_hardware=bool(data.get("remote_hardware", True)),
             sync_timeout=float(data.get("sync_timeout", 10.0)),
             ssh_options=tuple(str(item) for item in data.get("ssh_options", [])),
+            config_path=data.get("config_path"),
         )
 
 

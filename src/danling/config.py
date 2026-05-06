@@ -18,7 +18,7 @@ class DanLingConfig:
     primary_loss: str | None = None
     loss_window: int = 5
     no_improve_patience: int = 10
-    stale_seconds: int = 300
+    stale_seconds: int = 3600
     high_memory_ratio: float = 0.90
     hot_util_percent: float = 90.0
     watch_interval: float = 2.0
@@ -54,7 +54,7 @@ def default_config_text() -> str:
             "primary_loss:",
             "loss_window: 5",
             "no_improve_patience: 10",
-            "stale_seconds: 300",
+            "stale_seconds: 3600",
             "high_memory_ratio: 0.90",
             "hot_util_percent: 90.0",
             "watch_interval: 2.0",
