@@ -25,6 +25,7 @@ class RemoteSetupValues:
     name: str = "default"
     host: str = ""
     remote_path: str = ""
+    source: str = "csv"
     identity: str = ""
     port: str = ""
     sync_timeout: str = "10"
@@ -43,6 +44,8 @@ def validate_remote_setup_values(values: RemoteSetupValues) -> list[str]:
         errors.append("SSH 主机不能为空")
     if not values.remote_path.strip():
         errors.append("远程日志目录不能为空")
+    if _normalize_source(values.source) not in {"csv", "ultralytics-log"}:
+        errors.append("数据源必须是 csv 或 ultralytics-log")
     if not values.identity.strip():
         errors.append("SSH 私钥路径不能为空")
     if values.port.strip() and _parse_int(values.port) is None:
@@ -147,7 +150,7 @@ def save_remote_setup_values(
         remote_path=values.remote_path.strip(),
         identity=identity,
         port=_parse_int(values.port),
-        source="csv",
+        source=_normalize_source(values.source),
         sync_timeout=_parse_float(values.sync_timeout) or 10.0,
         config_path=values.config_path.strip() or None,
     )
@@ -170,6 +173,7 @@ def create_remote_setup_app(profile_name: str = "default"):
         "host": "remote-host",
         "port": "remote-port",
         "remote_path": "remote-path",
+        "source": "remote-source",
         "identity": "remote-identity",
         "sync_timeout": "remote-sync-timeout",
         "config_path": "remote-config-path",
@@ -238,8 +242,10 @@ def create_remote_setup_app(profile_name: str = "default"):
                     yield Input(value=default_values.host, id=field_ids["host"])
                     yield Label("SSH 端口（可留空）")
                     yield Input(value=default_values.port, id=field_ids["port"])
-                    yield Label("远程 results.csv 所在目录或文件")
+                    yield Label("远程日志目录或文件")
                     yield Input(value=default_values.remote_path, id=field_ids["remote_path"])
+                    yield Label("数据源（csv / ultralytics-log）")
+                    yield Input(value=default_values.source, id=field_ids["source"])
                     yield Label("SSH 私钥路径")
                     yield Input(value=default_values.identity, id=field_ids["identity"])
                     yield Label("同步超时秒数")
@@ -313,6 +319,7 @@ def create_remote_setup_app(profile_name: str = "default"):
                 host=self.query_one(f"#{field_ids['host']}", Input).value,
                 port=self.query_one(f"#{field_ids['port']}", Input).value,
                 remote_path=self.query_one(f"#{field_ids['remote_path']}", Input).value,
+                source=self.query_one(f"#{field_ids['source']}", Input).value,
                 identity=self.query_one(f"#{field_ids['identity']}", Input).value,
                 sync_timeout=self.query_one(f"#{field_ids['sync_timeout']}", Input).value,
                 config_path=self.query_one(f"#{field_ids['config_path']}", Input).value,
@@ -339,7 +346,8 @@ def _help_text(values: RemoteSetupValues) -> str:
             "监控阶段会强制使用:",
             "   ssh -i <key> -o BatchMode=yes ...",
             "",
-            "当前远程监控仅支持 Ultralytics results.csv。",
+            "远程数据源支持 csv 和 ultralytics-log。",
+            "长 epoch 的训练建议使用 ultralytics-log 读取实时控制台进度。",
         ]
     )
 
@@ -375,3 +383,12 @@ def _parse_float(value: str) -> float | None:
         return float(stripped)
     except ValueError:
         return None
+
+
+def _normalize_source(source: str) -> str:
+    value = source.strip()
+    if value in {"log", "txt", "ultralytics_log"}:
+        return "ultralytics-log"
+    if value == "ultralytics":
+        return "csv"
+    return value or "csv"

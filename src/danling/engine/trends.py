@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -134,9 +135,18 @@ def _has_nan_or_inf(history: list[MetricSnapshot]) -> bool:
 
 
 def _stale_seconds(snapshot: MetricSnapshot, now: float | None) -> float | None:
+    """返回自日志文件最后修改时间以来的秒数；文件不存在时回退到 snapshot.timestamp。"""
+    current = time.time() if now is None else now
+
+    if snapshot.source_path:
+        try:
+            file_mtime = os.path.getmtime(snapshot.source_path)
+            return max(0.0, current - file_mtime)
+        except OSError:
+            pass
+
     if snapshot.timestamp is None:
         return None
-    current = time.time() if now is None else now
     return max(0.0, current - snapshot.timestamp)
 
 

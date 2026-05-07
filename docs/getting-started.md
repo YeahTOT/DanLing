@@ -29,6 +29,16 @@ SOTA 精度: 0.80
 
 五个境界阈值可以留空。保存时按 `Ctrl+S`，退出按 `q`。
 
+也可以在 `3 数据源配置` 子菜单中设置默认日志类型和路径，之后 `danling tui` 和 `danling watch` 无需再指定 PATH 和 `--source`：
+
+```bash
+# 在 config tui 中按 3 → 选数据源 → 填路径 → Ctrl+S
+
+# 配置后可直接运行
+danling tui --no-hardware
+danling watch --no-hardware
+```
+
 保存后确认配置能被读回：
 
 ```bash
@@ -52,6 +62,9 @@ danling simulate logs/tensorboard logs/run --source tensorboard --interval 2
 
 ```bash
 danling tui logs/run --source csv --config danling.yaml --no-hardware
+
+# 或在 danling.yaml 配置 data_path 和 source 后直接运行
+danling tui --no-hardware
 ```
 
 没有安装 Textual 时，用 Rich watch：

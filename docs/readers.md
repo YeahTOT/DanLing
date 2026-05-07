@@ -60,4 +60,4 @@ danling remote status trainbox --config danling.yaml
 danling remote watch trainbox --config danling.yaml
 ```
 
-当前远程监控只支持 Ultralytics `results.csv`。TensorBoard 远程 event 文件镜像不在这个入口中处理。
+当前远程监控支持 Ultralytics `results.csv` 和官方控制台 `.log/.txt`。TensorBoard 远程 event 文件镜像不在这个入口中处理。

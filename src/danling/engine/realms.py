@@ -14,8 +14,18 @@ REALM_NAMES = ["炼器期", "筑基期", "结丹期", "元婴期", "化神期"]
 def infer_realm(score: float | None, config: DanLingConfig) -> CultivationRealm:
     """根据当前主指标和配置推导丹灵境界。"""
     thresholds = _realm_thresholds(config)
-    if score is None or not math.isfinite(score) or thresholds is None:
+    if thresholds is None:
         return CultivationRealm()
+    if score is None or not math.isfinite(score):
+        name, floor = thresholds[0]
+        ceiling = thresholds[1][1] if len(thresholds) > 1 else None
+        return CultivationRealm(
+            name=name,
+            rank=1,
+            score_floor=floor,
+            score_ceiling=ceiling,
+            progress=None,
+        )
 
     realm_index = 0
     for index, (_name, floor) in enumerate(thresholds):

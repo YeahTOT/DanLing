@@ -207,6 +207,27 @@ class TestUltralyticsLogReader:
         assert latest.train_loss is not None
         assert latest.map50 is None
 
+    def test_expands_home_directory_in_log_path(self, tmp_path, monkeypatch) -> None:
+        home = tmp_path / "home"
+        log_dir = home / "logs"
+        log_dir.mkdir(parents=True)
+        log_path = log_dir / "sot.log"
+        log_path.write_text(
+            "\n".join(
+                [
+                    "Epoch GPU_mem box_loss cls_loss dfl_loss Instances Size",
+                    "9/100 9.43G 1.494 1.288 0.00624 76 960: 1% 110/7417",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("HOME", str(home))
+
+        latest = UltralyticsLogReader().read_latest("~/logs/sot.log")
+
+        assert latest is not None
+        assert latest.epoch == 9
+
     def test_detects_log_inside_directory(self, tmp_path) -> None:
         log_path = tmp_path / "train.log"
         log_path.write_text(

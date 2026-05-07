@@ -198,6 +198,23 @@ def test_tui_panel_helpers_include_metrics_hardware_and_events() -> None:
     assert "升级" in render_tui_events(state)
 
 
+def test_tui_metrics_can_show_source_and_path_context() -> None:
+    state = DanLingState(
+        pet_mood=PetMood.normal,
+        metric=MetricSnapshot(epoch=8, train_loss=1.0),
+    )
+
+    text = render_tui_metrics(
+        state,
+        source="ultralytics-log",
+        path="/home/jiatao/logs/det.log",
+    )
+
+    assert "日志模式: ultralytics-log" in text
+    assert "日志路径: /home/jiatao/logs/det.log" in text
+    assert "epoch: 8" in text
+
+
 def test_tui_pet_and_metrics_include_realm_progress_and_range() -> None:
     state = DanLingState(
         pet_mood=PetMood.evolving,
@@ -225,6 +242,20 @@ def test_tui_metrics_render_top_realm_range_and_unconfigured_fallback() -> None:
     assert "境界区间: >= 0.8000" in render_tui_metrics(top_state)
     assert "境界进度: 未配置" in render_tui_pet(empty_state)
     assert "境界区间: 未配置" in render_tui_metrics(empty_state)
+
+
+def test_tui_pet_shows_waiting_metric_when_range_is_configured_without_progress() -> None:
+    state = DanLingState(
+        realm=CultivationRealm(
+            name="炼器期",
+            score_floor=0.60,
+            score_ceiling=0.6625,
+            progress=None,
+        )
+    )
+
+    assert "境界进度: 等待指标" in render_tui_pet(state)
+    assert "境界区间: 0.6000 - 0.6625" in render_tui_metrics(state)
 
 
 def test_create_app_instantiates_when_textual_is_available() -> None:

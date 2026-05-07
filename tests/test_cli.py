@@ -204,6 +204,275 @@ def test_remote_status_without_profile_shows_setup_hint(monkeypatch) -> None:
     assert "danling remote setup missing" in result.stderr
 
 
+def test_remote_inspect_allows_path_and_source_override(monkeypatch, tmp_path) -> None:
+    created: dict[str, object] = {}
+    profile = RemoteProfile(
+        name="A30",
+        host="jiatao@172.16.4.1",
+        remote_path="/old/results",
+        identity=tmp_path / "id_ed25519",
+        source="csv",
+    )
+
+    class FakeRemoteMonitor:
+        def __init__(
+            self,
+            remote_profile: RemoteProfile,
+            config_path: Path | None,
+            *,
+            ssh_options: tuple[str, ...],
+            remote_hardware: bool,
+            sync_timeout: float,
+        ) -> None:
+            created["profile"] = remote_profile
+            created["remote_hardware"] = remote_hardware
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read_state(self) -> DanLingState:
+            return DanLingState(
+                metric=MetricSnapshot(
+                    source="ultralytics-log",
+                    source_path="/home/jiatao/logs/sot.log",
+                    epoch=8,
+                    train_loss=1.0,
+                )
+            )
+
+    monkeypatch.setattr("danling.cli.RemoteTrainingMonitor", FakeRemoteMonitor, raising=False)
+    monkeypatch.setattr("danling.cli.load_remote_profile", lambda name: profile)
+
+    result = runner.invoke(
+        app,
+        [
+            "remote",
+            "A30",
+            "inspect",
+            "/home/jiatao/logs/sot.log",
+            "--source",
+            "ultralytics-log",
+            "--json",
+            "--no-remote-hardware",
+        ],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["epoch"] == 8
+    overridden = created["profile"]
+    assert isinstance(overridden, RemoteProfile)
+    assert overridden.remote_path == "/home/jiatao/logs/sot.log"
+    assert overridden.source == "ultralytics-log"
+    assert created["remote_hardware"] is False
+
+
+def test_remote_tui_allows_path_and_source_override(monkeypatch, tmp_path) -> None:
+    created: dict[str, object] = {}
+    profile = RemoteProfile(
+        name="A30",
+        host="jiatao@172.16.4.1",
+        remote_path="/old/results",
+        identity=tmp_path / "id_ed25519",
+        source="csv",
+    )
+
+    class FakeRemoteMonitor:
+        display_label = "A30: jiatao@172.16.4.1:/home/jiatao/logs/sot.log"
+
+        def __init__(
+            self,
+            remote_profile: RemoteProfile,
+            config_path: Path | None,
+            *,
+            ssh_options: tuple[str, ...],
+            remote_hardware: bool,
+            sync_timeout: float,
+        ) -> None:
+            created["profile"] = remote_profile
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read_state(self) -> DanLingState:
+            return DanLingState(metric=MetricSnapshot(epoch=8, train_loss=1.0))
+
+    class FakeApp:
+        def run(self) -> None:
+            created["ran"] = True
+
+    textual_app = ModuleType("danling.renderers.textual_app")
+
+    def fake_create_app(path, **kwargs):
+        created["path"] = path
+        created["source"] = kwargs["source"]
+        created["display_label"] = kwargs["display_label"]
+        return FakeApp()
+
+    textual_app.create_app = fake_create_app
+
+    monkeypatch.setattr("danling.cli.RemoteTrainingMonitor", FakeRemoteMonitor, raising=False)
+    monkeypatch.setattr("danling.cli.load_remote_profile", lambda name: profile)
+    monkeypatch.setattr(
+        "importlib.util.find_spec",
+        lambda name: object() if name == "textual" else object(),
+    )
+    monkeypatch.setitem(sys.modules, "danling.renderers.textual_app", textual_app)
+
+    result = runner.invoke(
+        app,
+        [
+            "remote",
+            "A30",
+            "tui",
+            "/home/jiatao/logs/sot.log",
+            "--source",
+            "ultralytics-log",
+            "--no-remote-hardware",
+        ],
+    )
+
+    assert result.exit_code == 0
+    overridden = created["profile"]
+    assert isinstance(overridden, RemoteProfile)
+    assert overridden.remote_path == "/home/jiatao/logs/sot.log"
+    assert overridden.source == "ultralytics-log"
+    assert str(created["path"]) == "/home/jiatao/logs/sot.log"
+    assert created["source"] == "ultralytics-log"
+    assert created["ran"] is True
+
+
+def test_remote_tui_uses_configured_datasource_when_source_is_not_overridden(
+    monkeypatch, tmp_path
+) -> None:
+    created: dict[str, object] = {}
+    config_path = tmp_path / "danling.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "source: ultralytics-log",
+                "data_path:",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    profile = RemoteProfile(
+        name="A30",
+        host="jiatao@172.16.4.1",
+        remote_path="/home/jiatao/logs/sot.log",
+        identity=tmp_path / "id_ed25519",
+        source="csv",
+        config_path=str(config_path),
+    )
+
+    class FakeRemoteMonitor:
+        display_label = "A30: jiatao@172.16.4.1:/home/jiatao/logs/sot.log"
+
+        def __init__(
+            self,
+            remote_profile: RemoteProfile,
+            config_path: Path | None,
+            *,
+            ssh_options: tuple[str, ...],
+            remote_hardware: bool,
+            sync_timeout: float,
+        ) -> None:
+            created["profile"] = remote_profile
+            created["config_path"] = config_path
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read_state(self) -> DanLingState:
+            return DanLingState(metric=MetricSnapshot(epoch=8, train_loss=1.0))
+
+    class FakeApp:
+        def run(self) -> None:
+            created["ran"] = True
+
+    textual_app = ModuleType("danling.renderers.textual_app")
+
+    def fake_create_app(path, **kwargs):
+        created["path"] = path
+        created["source"] = kwargs["source"]
+        return FakeApp()
+
+    textual_app.create_app = fake_create_app
+
+    monkeypatch.setattr("danling.cli.RemoteTrainingMonitor", FakeRemoteMonitor, raising=False)
+    monkeypatch.setattr("danling.cli.load_remote_profile", lambda name: profile)
+    monkeypatch.setattr(
+        "importlib.util.find_spec",
+        lambda name: object() if name == "textual" else object(),
+    )
+    monkeypatch.setitem(sys.modules, "danling.renderers.textual_app", textual_app)
+
+    result = runner.invoke(app, ["remote", "A30", "tui", "--no-remote-hardware"])
+
+    assert result.exit_code == 0
+    resolved = created["profile"]
+    assert isinstance(resolved, RemoteProfile)
+    assert resolved.source == "ultralytics-log"
+    assert created["source"] == "ultralytics-log"
+    assert created["config_path"] == config_path
+    assert created["ran"] is True
+
+
+def test_remote_config_tui_associates_default_config_with_profile(
+    monkeypatch, tmp_path
+) -> None:
+    saved: dict[str, object] = {}
+    profile = RemoteProfile(
+        name="A30",
+        host="jiatao@172.16.4.1",
+        remote_path="/home/jiatao/logs/sot.log",
+        identity=tmp_path / "id_ed25519",
+        source="csv",
+    )
+
+    class FakeApp:
+        def run(self) -> None:
+            saved["ran"] = True
+
+    config_tui = ModuleType("danling.renderers.config_tui")
+
+    def fake_create_config_app(path):
+        saved["config_path"] = path
+        return FakeApp()
+
+    config_tui.create_config_app = fake_create_config_app
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("danling.cli.load_remote_profile", lambda name: profile)
+    monkeypatch.setattr(
+        "danling.cli.save_remote_profile",
+        lambda item: saved.setdefault("profile", item),
+    )
+    monkeypatch.setattr(
+        "importlib.util.find_spec",
+        lambda name: object() if name == "textual" else object(),
+    )
+    monkeypatch.setitem(sys.modules, "danling.renderers.config_tui", config_tui)
+
+    result = runner.invoke(app, ["remote", "A30", "config", "tui"])
+
+    assert result.exit_code == 0
+    assert saved["config_path"] == tmp_path / "danling.yaml"
+    associated = saved["profile"]
+    assert isinstance(associated, RemoteProfile)
+    assert associated.config_path == str(tmp_path / "danling.yaml")
+    assert saved["ran"] is True
+
+
 def test_remote_hardware_renders_saved_profile_gpu(monkeypatch, tmp_path) -> None:
     profile = RemoteProfile(
         name="lab",

@@ -22,6 +22,8 @@ danling config tui --config danling.yaml
 - `baseline_score`
 - `sota_score`
 - `realm_thresholds`
+- `source` — 默认数据源类型（`auto`/`csv`/`ultralytics-log`/`tensorboard`）
+- `data_path` — 默认数据路径，配置后 `danling tui` 和 `danling watch` 可省略 PATH 参数
 
 ## 境界配置
 
@@ -66,10 +68,11 @@ realm_thresholds:
 
 ## 配置 TUI 预览
 
-`danling config tui` 会先进入配置主页，提供两个子菜单：
+`danling config tui` 会先进入配置主页，提供三个子菜单：
 
-- `1 手动配置`：显示“左表单 + 右预览”。左侧编辑 `danling.yaml` 字段，右侧实时展示炼器期、筑基期、结丹期、元婴期、化神期的分段。
+- `1 手动配置`：显示”左表单 + 右预览”。左侧编辑 `danling.yaml` 字段，右侧实时展示炼器期、筑基期、结丹期、元婴期、化神期的分段。
 - `2 自动生成`：先选择 Ultralytics `results.csv`、官方日志输出或 TensorBoard event/logdir，再输入历史路径和关心指标，按 `Ctrl+G` 自动生成 `primary_score`、`baseline_score` 和 `sota_score`。
+- `3 数据源配置`：选择默认日志类型（`auto`/`csv`/`ultralytics-log`/`tensorboard`）并填写数据路径。配置后 `danling tui` 和 `danling watch` 无需再指定 PATH 和 `--source` 参数。
 
 - 五个 `realm_thresholds` 全留空时，右侧按 `baseline_score` 到 `sota_score` 自动等分。
 - 五个 `realm_thresholds` 全部填写时，右侧按手动阈值预览。

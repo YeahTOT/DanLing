@@ -21,6 +21,9 @@ from danling.readers.registry import read_history
 REMOTE_PROFILE_PATH = Path.home() / ".danling" / "remote_profiles.json"
 REMOTE_CSV_PATH_MARKER = "__DANLING_CSV_PATH__"
 REMOTE_CSV_MTIME_MARKER = "__DANLING_CSV_MTIME__"
+REMOTE_LOG_PATH_MARKER = "__DANLING_LOG_PATH__"
+REMOTE_LOG_MTIME_MARKER = "__DANLING_LOG_MTIME__"
+REMOTE_NOW_MARKER = "__DANLING_REMOTE_NOW__"
 
 
 class RemoteCommandError(RuntimeError):
@@ -143,7 +146,7 @@ class RemoteProfileStore:
 
 
 class RemoteTrainingMonitor:
-    """Poll a remote CSV log over SSH and build a DanLing state snapshot."""
+    """Poll a remote training log over SSH and build a DanLing state snapshot."""
 
     def __init__(
         self,
@@ -155,8 +158,6 @@ class RemoteTrainingMonitor:
         sync_timeout: float | None = None,
         cache_dir: Path | None = None,
     ) -> None:
-        if remote_profile.source != "csv":
-            raise ValueError("远程监控当前仅支持 Ultralytics results.csv")
         self.profile = remote_profile
         self.options = remote_profile.to_options(
             ssh_options=ssh_options,
@@ -193,15 +194,16 @@ class RemoteTrainingMonitor:
             shutil.rmtree(self.cache_dir, ignore_errors=True)
 
     def read_state(self) -> DanLingState:
-        local_path = read_remote_csv_to_cache(
+        local_path, remote_now = read_remote_history_to_cache(
             self.options,
             self.profile.remote_path,
+            self.profile.source,
             self.cache_dir,
         )
         config = load_config(str(self.config_path) if self.config_path is not None else None)
-        history = read_history(str(local_path), source="csv")
+        history = read_history(str(local_path), source=self.profile.source)
         hardware = read_remote_nvidia_hardware(self.options) if self.remote_hardware else []
-        return build_state(history, hardware, config)
+        return build_state(history, hardware, config, now=remote_now)
 
 
 def save_remote_profile(
@@ -241,26 +243,42 @@ def read_remote_csv_to_cache(
     cache_dir: Path,
 ) -> Path:
     """Read remote `results.csv` through SSH stdout and cache it as a local file."""
+    local_path, _remote_now = read_remote_history_to_cache(
+        options,
+        remote_path,
+        "csv",
+        cache_dir,
+    )
+    return local_path
+
+
+def read_remote_history_to_cache(
+    options: RemoteOptions,
+    remote_path: str,
+    source: str,
+    cache_dir: Path,
+) -> tuple[Path, float | None]:
+    """Read a remote training log through SSH stdout and cache it locally."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     result = _run_ssh(
         options,
-        _remote_csv_read_command(remote_path),
+        _remote_log_read_command(remote_path, source),
         allowed_returncodes=(0, 2),
     )
     if result.returncode == 2:
         raise RemoteLogNotFound(
-            f"No remote results.csv found at {options.host}:{remote_path}"
+            f"No remote training log found at {options.host}:{remote_path}"
         )
 
-    mtime, csv_text = _parse_remote_csv_output(result.stdout)
-    if not csv_text.strip():
-        raise RemoteLogNotFound(f"Remote results.csv is empty at {options.host}:{remote_path}")
+    remote_file, mtime, remote_now, log_text = _parse_remote_log_output(result.stdout)
+    if not log_text.strip():
+        raise RemoteLogNotFound(f"Remote training log is empty at {options.host}:{remote_path}")
 
-    local_csv = cache_dir / "results.csv"
-    local_csv.write_text(csv_text, encoding="utf-8")
+    local_file = cache_dir / _cache_filename(source, remote_file)
+    local_file.write_text(log_text, encoding="utf-8")
     if mtime is not None:
-        os.utime(local_csv, (mtime, mtime))
-    return cache_dir
+        os.utime(local_file, (mtime, mtime))
+    return (cache_dir if _is_csv_source(source) else local_file), remote_now
 
 
 def read_remote_nvidia_hardware(options: RemoteOptions) -> list[HardwareSnapshot]:
@@ -328,37 +346,101 @@ def _run_ssh(
 
 
 def _remote_csv_read_command(remote_path: str) -> str:
+    return _remote_log_read_command(remote_path, "csv")
+
+
+def _remote_log_read_command(remote_path: str, source: str) -> str:
     quoted = shlex.quote(remote_path)
+    if _is_csv_source(source):
+        resolve = (
+            'if [ -f "$p" ]; then f="$p"; '
+            'elif [ -f "$p/results.csv" ]; then f="$p/results.csv"; '
+            "else exit 2; fi; "
+        )
+        path_marker = REMOTE_CSV_PATH_MARKER
+        mtime_marker = REMOTE_CSV_MTIME_MARKER
+    elif _is_log_source(source):
+        resolve = (
+            'if [ -f "$p" ]; then f="$p"; '
+            'elif [ -d "$p" ]; then '
+            'for n in train.log training.log output.log stdout.log nohup.out; do '
+            '[ -f "$p/$n" ] && { f="$p/$n"; break; }; '
+            "done; "
+            'if [ -z "$f" ]; then '
+            'f=$(find "$p" -maxdepth 1 -type f '
+            '\\( -name "*.log" -o -name "*.txt" -o -name "nohup.out" \\) '
+            '-exec ls -t {} + 2>/dev/null | sed -n "1p"); '
+            "fi; "
+            "fi; "
+            '[ -n "$f" ] || exit 2; '
+        )
+        path_marker = REMOTE_LOG_PATH_MARKER
+        mtime_marker = REMOTE_LOG_MTIME_MARKER
+    else:
+        raise ValueError(f"远程监控不支持数据源: {source}")
+
+    expand_home = 'case "$p" in "~") p="$HOME";; "~/"*) p="$HOME/${p#~/}";; esac; '
     return (
         f"p={quoted}; "
-        'if [ -f "$p" ]; then f="$p"; '
-        'elif [ -f "$p/results.csv" ]; then f="$p/results.csv"; '
-        "else exit 2; fi; "
-        f'printf "{REMOTE_CSV_PATH_MARKER}%s\\n" "$f"; '
-        f'printf "{REMOTE_CSV_MTIME_MARKER}"; '
+        f"{expand_home}"
+        f"{resolve}"
+        f'printf "{path_marker}%s\\n" "$f"; '
+        f'printf "{mtime_marker}"; '
         '(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || date +%s); '
+        f'printf "{REMOTE_NOW_MARKER}"; '
+        'date +%s; '
         'cat "$f"'
     )
 
 
 def _parse_remote_csv_output(output: str) -> tuple[float | None, str]:
+    _remote_file, mtime, _remote_now, text = _parse_remote_log_output(output)
+    return mtime, text
+
+
+def _parse_remote_log_output(output: str) -> tuple[str, float | None, float | None, str]:
     lines = output.splitlines(keepends=True)
-    if len(lines) < 3:
-        raise RemoteLogNotFound("Remote results.csv output was incomplete")
+    if len(lines) < 4:
+        raise RemoteLogNotFound("Remote training log output was incomplete")
 
     path_line = lines[0].strip()
     mtime_line = lines[1].strip()
-    if not path_line.startswith(REMOTE_CSV_PATH_MARKER):
-        raise RemoteLogNotFound("Remote results.csv output did not include path marker")
-    if not mtime_line.startswith(REMOTE_CSV_MTIME_MARKER):
-        raise RemoteLogNotFound("Remote results.csv output did not include mtime marker")
+    now_line = lines[2].strip()
+    path_marker = _line_marker(path_line, (REMOTE_CSV_PATH_MARKER, REMOTE_LOG_PATH_MARKER))
+    mtime_marker = _line_marker(mtime_line, (REMOTE_CSV_MTIME_MARKER, REMOTE_LOG_MTIME_MARKER))
+    if path_marker is None:
+        raise RemoteLogNotFound("Remote training log output did not include path marker")
+    if mtime_marker is None:
+        raise RemoteLogNotFound("Remote training log output did not include mtime marker")
+    if not now_line.startswith(REMOTE_NOW_MARKER):
+        raise RemoteLogNotFound("Remote training log output did not include remote time marker")
 
-    mtime_text = mtime_line.removeprefix(REMOTE_CSV_MTIME_MARKER)
-    try:
-        mtime = float(mtime_text)
-    except ValueError:
-        mtime = None
-    return mtime, "".join(lines[2:])
+    remote_file = path_line.removeprefix(path_marker)
+    mtime = _optional_float(mtime_line.removeprefix(mtime_marker))
+    remote_now = _optional_float(now_line.removeprefix(REMOTE_NOW_MARKER))
+    return remote_file, mtime, remote_now, "".join(lines[3:])
+
+
+def _line_marker(line: str, markers: tuple[str, ...]) -> str | None:
+    for marker in markers:
+        if line.startswith(marker):
+            return marker
+    return None
+
+
+def _cache_filename(source: str, remote_file: str) -> str:
+    if _is_csv_source(source):
+        return "results.csv"
+    name = Path(remote_file).name
+    return name if name else "train.log"
+
+
+def _is_csv_source(source: str) -> bool:
+    return source in {"csv", "ultralytics"}
+
+
+def _is_log_source(source: str) -> bool:
+    return source in {"log", "txt", "ultralytics_log", "ultralytics-log"}
 
 
 def _ssh_common_args(options: RemoteOptions) -> list[str]:
@@ -379,3 +461,12 @@ def _optional_int(value: object) -> int | None:
     if value in {None, ""}:
         return None
     return int(value)
+
+
+def _optional_float(value: object) -> float | None:
+    if value in {None, ""}:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

@@ -94,7 +94,7 @@ class UltralyticsLogReader(BaseReader):
 
     @staticmethod
     def _resolve_path(path: str) -> Path | None:
-        p = Path(path)
+        p = Path(path).expanduser()
         if p.is_file() and _is_log_file(p):
             return p
         if not p.is_dir():
@@ -131,6 +131,7 @@ def _train_match_to_snapshot(
     return MetricSnapshot(
         source="ultralytics-log",
         run_path=os.path.dirname(source_path),
+        source_path=source_path,
         epoch=int(match.group("epoch")),
         timestamp=file_mtime,
         train_loss=box_loss + cls_loss + dfl_loss,

@@ -61,7 +61,7 @@ class TensorBoardReader(BaseReader):
         run_path = _run_path(root)
 
         history = [
-            _snapshot_for_step(step, raw, timestamps.get(step), str(run_path))
+            _snapshot_for_step(step, raw, timestamps.get(step), str(run_path), str(root))
             for step, raw in by_step.items()
         ]
         history.sort(key=lambda item: item.step if item.step is not None else -1)
@@ -105,7 +105,7 @@ def _scoped_tag(tag: str, scope: str | None) -> str:
 
 
 def _snapshot_for_step(
-    step: int, raw: dict[str, float], timestamp: float | None, source: str
+    step: int, raw: dict[str, float], timestamp: float | None, source: str, source_path: str = ""
 ) -> MetricSnapshot:
     normalized_raw = _normalize_raw(raw)
 
@@ -236,6 +236,7 @@ def _snapshot_for_step(
     return MetricSnapshot(
         source="tensorboard",
         run_path=str(Path(source).parent if Path(source).is_file() else source),
+        source_path=source_path or None,
         step=step,
         epoch=step,
         timestamp=timestamp,

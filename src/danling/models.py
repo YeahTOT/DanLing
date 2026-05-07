@@ -81,6 +81,7 @@ class MetricSnapshot:
 
     source: str = ""
     run_path: str | None = None
+    source_path: str | None = None
     step: int | None = None
     epoch: int | None = None
     timestamp: float | None = None

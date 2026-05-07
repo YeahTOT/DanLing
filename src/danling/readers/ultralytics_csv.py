@@ -237,6 +237,7 @@ class UltralyticsCSVReader(BaseReader):
         return MetricSnapshot(
             source="csv",
             run_path=os.path.dirname(source_path),
+            source_path=source_path,
             epoch=epoch,
             timestamp=timestamp,
             train_loss=train_loss,

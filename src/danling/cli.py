@@ -8,6 +8,7 @@ import shutil
 import sys
 import time
 import traceback
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
 
@@ -27,6 +28,7 @@ from danling.remote import (
     RemoteTrainingMonitor,
     load_remote_profile,
     read_remote_nvidia_hardware,
+    save_remote_profile,
 )
 from danling.renderers.console import render_state_panel
 from danling.renderers.statusline import render_statusline
@@ -167,7 +169,7 @@ def statusline(
 
 @app.command()
 def watch(
-    path: Annotated[Path, typer.Argument(help="训练日志目录或文件路径")],
+    path: Annotated[Path | None, typer.Argument(help="训练日志目录或文件路径")] = None,
     source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     interval: Annotated[float | None, typer.Option("--interval", help="刷新间隔秒数")] = None,
@@ -175,15 +177,18 @@ def watch(
     no_save: Annotated[bool, typer.Option("--no-save", help="不更新本地状态")] = False,
     debug: Annotated[bool, typer.Option("--debug", help="显示调试 traceback")] = False,
 ) -> None:
-    """实时监控训练日志并刷新状态面板。"""
+    """实时监控训练日志并刷新状态面板；PATH 可从 danling.yaml 的 data_path 读取。"""
+    resolved_path, resolved_source = _resolve_path_and_source(path, source, config)
     cfg = _load_config_or_exit(config, debug)
     refresh_interval = interval if interval is not None else cfg.watch_interval
     try:
         with Live(refresh_per_second=4, screen=False) as live:
             while True:
-                current = _build_state_for_path(path, source, config, no_hardware, debug)
+                current = _build_state_for_path(
+                    resolved_path, resolved_source, config, no_hardware, debug
+                )
                 if not no_save:
-                    _update_store(path, current)
+                    _update_store(resolved_path, current)
                 live.update(render_state_panel(current))
                 time.sleep(refresh_interval)
     except KeyboardInterrupt:
@@ -345,19 +350,26 @@ def config_tui(
 
 @app.command()
 def tui(
-    path: Annotated[Path, typer.Argument(help="训练日志目录或文件路径")],
+    path: Annotated[Path | None, typer.Argument(help="训练日志目录或文件路径")] = None,
     source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     interval: Annotated[float, typer.Option("--interval", help="刷新间隔秒数")] = 2.0,
     no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,
 ) -> None:
-    """启动可选 Textual 全屏监控 TUI。"""
+    """启动可选 Textual 全屏监控 TUI；PATH 可从 danling.yaml 的 data_path 读取。"""
     if importlib.util.find_spec("textual") is None:
         typer.echo("Textual UI requires: pip install danling[tui]")
         raise typer.Exit(code=1)
     from danling.renderers.textual_app import create_app
 
-    create_app(path, source=source, interval=interval, config=config, no_hardware=no_hardware).run()
+    resolved_path, resolved_source = _resolve_path_and_source(path, source, config)
+    create_app(
+        resolved_path,
+        source=resolved_source,
+        interval=interval,
+        config=config,
+        no_hardware=no_hardware,
+    ).run()
 
 
 # --- Remote helpers ---
@@ -416,6 +428,7 @@ def remote_state(
     try:
         profile = _get_profile_from_context(ctx, debug)
         config_path = _resolve_config_for_remote(profile, config)
+        profile = _resolve_remote_profile(profile, config_path, debug=debug)
         with RemoteTrainingMonitor(
             profile,
             config_path,
@@ -453,6 +466,7 @@ def remote_status(
     try:
         profile = _get_profile_from_context(ctx, debug)
         config_path = _resolve_config_for_remote(profile, config)
+        profile = _resolve_remote_profile(profile, config_path, debug=debug)
         with RemoteTrainingMonitor(
             profile,
             config_path,
@@ -487,6 +501,7 @@ def remote_statusline(
     try:
         profile = _get_profile_from_context(ctx, debug)
         config_path = _resolve_config_for_remote(profile, config)
+        profile = _resolve_remote_profile(profile, config_path, debug=debug)
         with RemoteTrainingMonitor(
             profile,
             config_path,
@@ -532,6 +547,7 @@ def remote_watch(
     try:
         profile = _get_profile_from_context(ctx, debug)
         config_path = _resolve_config_for_remote(profile, config)
+        profile = _resolve_remote_profile(profile, config_path, debug=debug)
         with RemoteTrainingMonitor(
             profile,
             config_path,
@@ -554,6 +570,11 @@ def remote_watch(
 @remote_app.command("tui")
 def remote_tui(
     ctx: typer.Context,
+    path: Annotated[
+        Path | None,
+        typer.Argument(help="可选远程训练日志目录或文件路径，覆盖 profile.remote_path"),
+    ] = None,
+    source: Annotated[str | None, typer.Option("--source", help=SOURCE_HELP)] = None,
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     interval: Annotated[float, typer.Option("--interval", help="刷新间隔秒数")] = 2.0,
     ssh_option: Annotated[
@@ -576,6 +597,13 @@ def remote_tui(
     try:
         profile = _get_profile_from_context(ctx, debug)
         config_path = _resolve_config_for_remote(profile, config)
+        profile = _resolve_remote_profile(
+            profile,
+            config_path,
+            path=path,
+            source=source,
+            debug=debug,
+        )
         with RemoteTrainingMonitor(
             profile,
             config_path,
@@ -585,7 +613,7 @@ def remote_tui(
         ) as monitor:
             create_app(
                 Path(profile.remote_path),
-                source="csv",
+                source=profile.source,
                 interval=interval,
                 config=config_path,
                 state_provider=monitor.read_state,
@@ -668,6 +696,7 @@ def remote_doctor(
     try:
         profile = _get_profile_from_context(ctx, debug)
         config_path = _resolve_config_for_remote(profile, config)
+        profile = _resolve_remote_profile(profile, config_path, debug=debug)
         with RemoteTrainingMonitor(
             profile,
             config_path,
@@ -707,6 +736,11 @@ def remote_doctor(
 @remote_app.command("inspect")
 def remote_inspect(
     ctx: typer.Context,
+    path: Annotated[
+        Path | None,
+        typer.Argument(help="可选远程训练日志目录或文件路径，覆盖 profile.remote_path"),
+    ] = None,
+    source: Annotated[str | None, typer.Option("--source", help=SOURCE_HELP)] = None,
     config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
     json_output: Annotated[bool, typer.Option("--json/--no-json", help="以 JSON 格式输出")] = False,
     ssh_option: Annotated[
@@ -724,6 +758,13 @@ def remote_inspect(
     try:
         profile = _get_profile_from_context(ctx, debug)
         config_path = _resolve_config_for_remote(profile, config)
+        profile = _resolve_remote_profile(
+            profile,
+            config_path,
+            path=path,
+            source=source,
+            debug=debug,
+        )
         with RemoteTrainingMonitor(
             profile,
             config_path,
@@ -788,7 +829,70 @@ def remote_config_tui(
 
     profile = _get_profile_from_context(ctx, debug)
     config_path = _resolve_config_for_remote(profile, config)
+    if config is None and profile.config_path is None:
+        config_path = Path.cwd() / "danling.yaml"
+        save_remote_profile(replace(profile, config_path=str(config_path)))
     create_config_app(config_path).run()
+
+
+def _resolve_path_and_source(
+    cli_path: Path | None,
+    cli_source: str,
+    config_path: Path | None,
+) -> tuple[Path, str]:
+    """解析 path/source，CLI 参数优先，其次从配置文件 fallback。"""
+    cfg = _load_config_or_exit(config_path, False)
+
+    if cli_path is not None:
+        resolved_path = cli_path
+    elif cfg.data_path:
+        resolved_path = Path(cfg.data_path)
+    else:
+        typer.echo("错误：请指定日志路径，或在 danling.yaml 中配置 data_path", err=True)
+        raise typer.Exit(code=1)
+
+    resolved_source = cli_source
+    if cli_source == "auto" and cfg.source != "auto":
+        resolved_source = cfg.source
+
+    return resolved_path, resolved_source
+
+
+def _override_remote_profile(
+    profile: RemoteProfile,
+    *,
+    path: Path | None = None,
+    source: str | None = None,
+) -> RemoteProfile:
+    updates: dict[str, str] = {}
+    if path is not None:
+        updates["remote_path"] = str(path)
+    if source:
+        updates["source"] = source
+    return replace(profile, **updates) if updates else profile
+
+
+def _resolve_remote_profile(
+    profile: RemoteProfile,
+    config_path: Path | None,
+    *,
+    path: Path | None = None,
+    source: str | None = None,
+    debug: bool = False,
+) -> RemoteProfile:
+    """Merge explicit remote overrides with profile-linked config values."""
+    updates: dict[str, str] = {}
+    if config_path is not None:
+        cfg = _load_config_or_exit(config_path, debug)
+        if path is None and cfg.data_path:
+            updates["remote_path"] = cfg.data_path
+        if source is None and cfg.source != "auto":
+            updates["source"] = cfg.source
+    if path is not None:
+        updates["remote_path"] = str(path)
+    if source:
+        updates["source"] = source
+    return replace(profile, **updates) if updates else profile
 
 
 def _load_remote_profile_or_exit(profile: str, debug: bool):

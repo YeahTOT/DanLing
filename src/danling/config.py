@@ -25,6 +25,8 @@ class DanLingConfig:
     baseline_score: float | None = None
     sota_score: float | None = None
     realm_thresholds: dict[str, float] | list[float] | None = None
+    source: str = "auto"
+    data_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -66,6 +68,8 @@ def default_config_text() -> str:
             "#   结丹期: 0.70",
             "#   元婴期: 0.80",
             "#   化神期: 0.90",
+            "source: auto",
+            "data_path:",
             "",
         ]
     )

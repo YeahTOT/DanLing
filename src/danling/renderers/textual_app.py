@@ -446,7 +446,9 @@ def create_app(
                 self.state.furnace_state, self.frame_index
             )
             furnace_panel.update(furnace_frame)
-            metrics_panel.update(render_tui_metrics(self.state))
+            metrics_panel.update(
+                render_tui_metrics(self.state, source=source, path=path_label)
+            )
             hardware_panel.update(render_tui_hardware(self.state))
             events_panel.update(render_tui_events(self.state, self.frame_index))
 
@@ -486,7 +488,7 @@ def render_tui_text(state: DanLingState, path: Path, source: str, frame_index: i
         "",
         furnace_animation_frame(state.furnace_state, frame_index),
         "",
-        render_tui_metrics(state),
+        render_tui_metrics(state, source=source, path=str(path)),
         "",
         render_tui_hardware(state),
         "",
@@ -495,7 +497,12 @@ def render_tui_text(state: DanLingState, path: Path, source: str, frame_index: i
     return "\n".join(lines)
 
 
-def render_tui_metrics(state: DanLingState) -> str:
+def render_tui_metrics(
+    state: DanLingState,
+    *,
+    source: str | None = None,
+    path: str | None = None,
+) -> str:
     """渲染训练指标区域。"""
     metric = state.metric
     lines = [
@@ -504,6 +511,10 @@ def render_tui_metrics(state: DanLingState) -> str:
         f"furnace: {state.furnace_state.value}",
         f"境界区间: {_fmt_realm_range(state.realm)}",
     ]
+    if source:
+        lines.insert(1, f"日志模式: {source}")
+    if path:
+        lines.insert(2 if source else 1, f"日志路径: {path}")
     if metric is None:
         lines.append("metric: unknown")
     else:
@@ -527,7 +538,7 @@ def render_tui_pet(state: DanLingState, frame_index: int = 0) -> str:
             pet_animation_frame(state.pet_mood, frame_index),
             "",
             f"境界: {state.realm.name}",
-            f"境界进度: {_fmt_realm_progress(state.realm.progress)}",
+            f"境界进度: {_fmt_realm_progress(state.realm)}",
         ]
     )
 
@@ -603,8 +614,11 @@ def _fmt_memory(device) -> str:
     return f"{device.memory_used_mb / 1024:.1f}/{device.memory_total_mb / 1024:.1f}G"
 
 
-def _fmt_realm_progress(progress: float | None) -> str:
+def _fmt_realm_progress(realm) -> str:
+    progress = realm.progress
     if progress is None:
+        if realm.score_floor is not None:
+            return "等待指标"
         return "未配置"
     return f"{max(0, min(100, round(progress * 100)))}%"
 

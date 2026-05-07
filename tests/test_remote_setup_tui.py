@@ -145,6 +145,26 @@ def test_save_remote_setup_values_persists_profile(tmp_path) -> None:
     assert load_remote_profile("lab", store=store) == profile
 
 
+def test_save_remote_setup_values_persists_ultralytics_log_source(tmp_path) -> None:
+    key = tmp_path / "id_ed25519"
+    key.write_text("private", encoding="utf-8")
+    store = RemoteProfileStore(tmp_path / "profiles.json")
+
+    profile = save_remote_setup_values(
+        RemoteSetupValues(
+            name="lab",
+            host="trainbox",
+            remote_path="/logs/sot.log",
+            source="log",
+            identity=str(key),
+        ),
+        store=store,
+    )
+
+    assert profile.source == "ultralytics-log"
+    assert load_remote_profile("lab", store=store).source == "ultralytics-log"
+
+
 def test_save_remote_setup_values_rejects_missing_key(tmp_path) -> None:
     store = RemoteProfileStore(tmp_path / "profiles.json")
 

@@ -130,6 +130,20 @@ def test_build_state_uncalibrated_realm_falls_back_to_liqi() -> None:
     assert state.realm.progress is None
 
 
+def test_build_state_preserves_configured_realm_range_without_current_score() -> None:
+    state = build_state(
+        [metric(train_loss=1.0)],
+        hardware=[],
+        config=DanLingConfig(baseline_score=0.60, sota_score=0.85),
+    )
+
+    assert state.realm.name == "炼器期"
+    assert state.realm.rank == 1
+    assert state.realm.score_floor == pytest.approx(0.60)
+    assert state.realm.score_ceiling == pytest.approx(0.6625)
+    assert state.realm.progress is None
+
+
 def test_build_state_uses_configured_primary_score_for_realm() -> None:
     snapshot = metric(train_loss=1.0, score=0.62)
     snapshot.raw["precision"] = 0.92

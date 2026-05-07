@@ -47,7 +47,7 @@ pip install "danling[tensorboard]"  # TensorBoard event reader
 pip install "danling[yaml]"         # PyYAML 配置解析
 ```
 
-初始化配置：
+初始化配置（含数据源和路径，配置后 tui/watch 可不指定 PATH 和 --source）：
 
 ```bash
 danling init
@@ -62,11 +62,15 @@ danling status examples/ultralytics_run --config danling.yaml --no-hardware
 danling doctor examples/ultralytics_run --config danling.yaml --no-hardware
 ```
 
-持续监控训练目录：
+持续监控训练目录（若已在 danling.yaml 配置 data_path 和 source，可省略参数）：
 
 ```bash
 danling watch logs/run --source csv --config danling.yaml --no-hardware
 danling tui logs/run --source csv --config danling.yaml --no-hardware
+
+# 配置 data_path 后可直接运行
+danling watch --no-hardware
+danling tui --no-hardware
 ```
 
 通过 SSH 可视化远程训练：
@@ -78,7 +82,7 @@ danling remote status trainbox --config danling.yaml
 danling remote tui trainbox --config danling.yaml
 ```
 
-`remote setup` 会用 TUI 辅助填写 `user@host`、远程日志目录和 SSH 私钥路径，并提示执行 `ssh-copy-id`。监控阶段强制使用 `ssh -i <key> -o BatchMode=yes`，不会等待密码输入；远程 GPU 状态默认通过 `nvidia-smi` 读取，也可以用 `remote hardware` 单独查看。当前远程监控只支持 Ultralytics `results.csv`。
+`remote setup` 会用 TUI 辅助填写 `user@host`、远程日志目录、数据源和 SSH 私钥路径，并提示执行 `ssh-copy-id`。监控阶段强制使用 `ssh -i <key> -o BatchMode=yes`，不会等待密码输入；远程 GPU 状态默认通过 `nvidia-smi` 读取，也可以用 `remote hardware` 单独查看。远程监控支持 Ultralytics `results.csv` 和官方控制台 `.log/.txt`，长 epoch 训练建议选 `ultralytics-log`。
 
 回放历史日志做演示：
 

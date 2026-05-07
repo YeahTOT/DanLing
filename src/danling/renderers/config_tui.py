@@ -17,7 +17,7 @@ from danling.models import MetricSnapshot
 from danling.readers.registry import read_history
 
 REALM_SEGMENT_COUNT = len(REALM_THRESHOLD_NAMES)
-TEXT_FIELD_IDS = ["pet_name", "primary_score", "primary_loss"]
+TEXT_FIELD_IDS = ["pet_name", "primary_score", "primary_loss", "source", "data_path"]
 FLOAT_FIELD_IDS = [
     "baseline_score",
     "sota_score",
@@ -40,6 +40,25 @@ AUTO_SOURCE_LABELS = {
     "ultralytics-log": "Ultralytics log/txt",
     "tensorboard": "TensorBoard event/logdir",
 }
+DATASOURCE_OPTIONS = [
+    ("auto", "自动检测 (auto)", "自动从路径检测数据源类型。"),
+    ("csv", "Ultralytics results.csv", "读取训练目录或 results.csv 文件。"),
+    ("ultralytics-log", "Ultralytics log/txt", "读取后台进程重定向的官方训练输出。"),
+    ("tensorboard", "TensorBoard event/logdir", "读取 events.out.tfevents.* 文件或日志目录。"),
+]
+DATASOURCE_PATH_ID = "datasource-path"
+DATASOURCE_SOURCE_LABEL_ID = "datasource-source-label"
+DATASOURCE_PANEL_ID = "datasource-panel"
+DATASOURCE_FORM_ID = "datasource-form"
+
+
+def _datasource_label(source: str) -> str:
+    """返回数据源的可读标签。"""
+    labels = {
+        "auto": "自动检测 (auto)",
+        **AUTO_SOURCE_LABELS,
+    }
+    return labels.get(source, source)
 
 
 def realm_field_id(name: str) -> str:
@@ -61,6 +80,8 @@ CONFIG_FORM_ROWS = [
     ("loss_window", "loss 窗口"),
     ("no_improve_patience", "无提升耐心"),
     ("stale_seconds", "日志过期时间（秒），默认1h"),
+    ("source", "数据源（auto/csv/ultralytics-log/tensorboard）"),
+    ("data_path", "数据路径（如 logs/run）"),
 ]
 
 
@@ -115,6 +136,8 @@ def config_from_form_values(
         baseline_score=_optional_float_value("baseline_score", merged["baseline_score"]),
         sota_score=_optional_float_value("sota_score", merged["sota_score"]),
         realm_thresholds=thresholds,
+        source=_text_value(merged.get("source", ""), base.source) or "auto",
+        data_path=_optional_text_value(merged.get("data_path", "")),
     )
 
 
@@ -286,7 +309,8 @@ def create_config_app(config_path: Path | None = None):
         BINDINGS = [
             ("1", "manual", "手动配置"),
             ("2", "auto", "自动生成"),
-            ("3", "tensorboard", "TensorBoard"),
+            ("3", "datasource", "数据源"),
+            ("4", "source_tb", "TensorBoard"),
             ("escape", "home", "主页"),
             ("ctrl+g", "generate", "生成"),
             ("ctrl+s", "save", "保存"),
@@ -298,7 +322,7 @@ def create_config_app(config_path: Path | None = None):
             color: #d6fff8;
         }
 
-        #config-home, #config-manual, #config-auto {
+        #config-home, #config-manual, #config-auto, #config-datasource {
             height: 1fr;
         }
 
@@ -310,6 +334,18 @@ def create_config_app(config_path: Path | None = None):
             border: round #16d9c5;
             padding: 2 3;
             background: #0b1720;
+            height: auto;
+        }
+
+        #datasource-panel {
+            border: round #16d9c5;
+            padding: 2 3;
+            background: #0b1720;
+            height: auto;
+        }
+
+        #datasource-form {
+            padding: 1 2;
             height: auto;
         }
 
@@ -360,6 +396,7 @@ def create_config_app(config_path: Path | None = None):
             super().__init__()
             self.mode = "home"
             self.auto_source = "csv"
+            self.datasource_source = initial_config.source or "auto"
 
         def compose(self) -> ComposeResult:
             yield Header()
@@ -381,7 +418,11 @@ def create_config_app(config_path: Path | None = None):
                             "   再输入历史路径和关心指标，",
                             "   自动使用 20% 位置结果作为 baseline，历史最佳作为 SOTA。",
                             "",
-                            "按 1 或 2 进入子菜单；按 Esc 回到主页。",
+                            "3. 数据源配置",
+                            "   配置默认日志类型（source）和数据路径，",
+                            "   配置后 danling tui 无需再指定 --source 和 PATH。",
+                            "",
+                            "按 1/2/3 进入子菜单；按 Esc 回到主页。",
                         ]
                     ),
                     id="config-home-panel",
@@ -437,6 +478,40 @@ def create_config_app(config_path: Path | None = None):
                             "自动生成预览\n\n选择数据源后输入历史路径和关心指标，按 Ctrl+G。",
                             id="auto-preview",
                         )
+            with Vertical(id="config-datasource"):
+                yield Static(
+                    "\n".join(
+                        [
+                            "数据源配置",
+                            "",
+                            "1. 自动检测 (auto)",
+                            "   自动从路径检测数据源类型。",
+                            "",
+                            "2. Ultralytics results.csv",
+                            "   读取训练目录或 results.csv 文件。",
+                            "",
+                            "3. Ultralytics log/txt",
+                            "   读取后台进程重定向的官方训练输出。",
+                            "",
+                            "4. TensorBoard event/logdir",
+                            "   读取 events.out.tfevents.* 文件或日志目录。",
+                            "",
+                            "按 1/2/3/4 选择数据源类型；输入数据路径；按 Ctrl+S 保存。",
+                        ]
+                    ),
+                    id=DATASOURCE_PANEL_ID,
+                )
+                with Vertical(id=DATASOURCE_FORM_ID):
+                    yield Static(
+                        f"当前数据源: {_datasource_label(initial_config.source or 'auto')}",
+                        id=DATASOURCE_SOURCE_LABEL_ID,
+                    )
+                    yield Label("数据路径")
+                    yield Input(
+                        value=initial_values.get("data_path", ""),
+                        placeholder="例如 logs/run 或 logs/run/results.csv",
+                        id=DATASOURCE_PATH_ID,
+                    )
             yield Footer()
 
         def on_mount(self) -> None:
@@ -447,6 +522,13 @@ def create_config_app(config_path: Path | None = None):
                 self._update_preview()
 
         def action_save(self) -> None:
+            if self.mode == "datasource":
+                source_widget_id = widget_ids["source"]
+                data_path_widget_id = widget_ids["data_path"]
+                self.query_one(f"#{source_widget_id}", Input).value = self.datasource_source
+                path_value = self.query_one(f"#{DATASOURCE_PATH_ID}", Input).value
+                self.query_one(f"#{data_path_widget_id}", Input).value = path_value
+
             values = self._form_values()
             message = self.query_one("#config-message", Static)
             try:
@@ -465,17 +547,32 @@ def create_config_app(config_path: Path | None = None):
             if self.mode == "auto-menu":
                 self._select_auto_source("csv")
                 return
+            if self.mode == "datasource":
+                self._select_datasource_source("auto")
+                return
             self._show_screen("manual")
 
         def action_auto(self) -> None:
             if self.mode == "auto-menu":
                 self._select_auto_source("ultralytics-log")
                 return
+            if self.mode == "datasource":
+                self._select_datasource_source("csv")
+                return
             self._show_screen("auto-menu")
 
-        def action_tensorboard(self) -> None:
+        def action_datasource(self) -> None:
             if self.mode == "auto-menu":
                 self._select_auto_source("tensorboard")
+                return
+            if self.mode == "datasource":
+                self._select_datasource_source("ultralytics-log")
+                return
+            self._show_screen("datasource")
+
+        def action_source_tb(self) -> None:
+            if self.mode == "datasource":
+                self._select_datasource_source("tensorboard")
 
         def action_generate(self) -> None:
             if self.mode != "auto-form":
@@ -550,6 +647,16 @@ def create_config_app(config_path: Path | None = None):
             )
             self._show_screen("auto-form")
 
+        def _select_datasource_source(self, source: str) -> None:
+            self.datasource_source = source
+            label = self.query_one(f"#{DATASOURCE_SOURCE_LABEL_ID}", Static)
+            label_text = _datasource_label(source)
+            label.update(f"当前数据源: {label_text}")
+            message = self.query_one("#config-message", Static)
+            message.update(
+                f"config: {target_path} | 已选: {label_text} | Ctrl+S 保存 | Esc 主页"
+            )
+
         def _form_values(self) -> dict[str, str]:
             return {
                 field_id: self.query_one(f"#{widget_ids[field_id]}", Input).value
@@ -567,9 +674,12 @@ def create_config_app(config_path: Path | None = None):
             self.query_one("#config-auto").display = mode in {"auto-menu", "auto-form"}
             self.query_one(f"#{AUTO_SOURCE_MENU_ID}").display = mode == "auto-menu"
             self.query_one(f"#{AUTO_FORM_ID}").display = mode == "auto-form"
+            self.query_one("#config-datasource").display = mode == "datasource"
             message = self.query_one("#config-message", Static)
             if mode == "home":
-                message.update(f"config: {target_path} | 1 手动配置 | 2 自动生成 | q 退出")
+                message.update(
+                    f"config: {target_path} | 1 手动配置 | 2 自动生成 | 3 数据源 | q 退出"
+                )
             elif mode == "manual":
                 message.update(
                     f"config: {target_path} | Ctrl+S 保存 | Esc 主页 | q 退出 | 手动配置"
@@ -579,6 +689,12 @@ def create_config_app(config_path: Path | None = None):
                 message.update(
                     f"config: {target_path} | 1 Ultralytics results.csv | "
                     "2 Ultralytics log/txt | 3 TensorBoard | Esc 主页"
+                )
+            elif mode == "datasource":
+                src_label = _datasource_label(self.datasource_source)
+                message.update(
+                    f"config: {target_path} | 已选: {src_label} | "
+                    "1/2/3/4 切换数据源 | Ctrl+S 保存 | Esc 主页"
                 )
             else:
                 message.update(

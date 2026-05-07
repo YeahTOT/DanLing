@@ -11,8 +11,8 @@ DanLing 的命令按“读取、解释、展示、配置、诊断”划分。多
 | `danling state PATH` | 输出 DanLing 聚合状态，可配合 `--json` |
 | `danling status PATH` | 渲染一次 Rich 状态面板 |
 | `danling statusline PATH` | 输出适合 shell prompt 或状态栏的一行状态 |
-| `danling watch PATH` | 循环刷新 Rich 状态面板 |
-| `danling tui PATH` | 启动可选 Textual 全屏监控 TUI |
+| `danling watch [PATH]` | 循环刷新 Rich 状态面板；PATH 可从 `danling.yaml` 的 `data_path` 读取 |
+| `danling tui [PATH]` | 启动可选 Textual 全屏监控 TUI；PATH 可从 `danling.yaml` 的 `data_path` 读取 |
 | `danling remote setup PROFILE` | 打开 TUI 配置远程 SSH 密钥和日志目录 |
 | `danling remote hardware PROFILE` | 通过 SSH 密钥读取远程 NVIDIA GPU 状态 |
 | `danling remote status PROFILE` | 通过 SSH 密钥读取远程训练日志并渲染一次状态面板 |
@@ -59,7 +59,7 @@ danling remote tui trainbox --config danling.yaml
 - `--remote-hardware/--no-remote-hardware`：是否读取远程 NVIDIA GPU 状态，默认读取。
 - `--sync-timeout FLOAT`：单次 SSH 超时秒数，默认 `10`。
 
-当前远程监控只支持 Ultralytics `results.csv`。TensorBoard 仍可本地读取，但远程 TUI 不再做 event 文件镜像。
+当前远程监控支持 Ultralytics `results.csv` 和官方控制台 `.log/.txt`。长 epoch 训练中，如果控制台日志一直刷新但 `results.csv` 暂未写入新 epoch，建议把远程 profile 的数据源设为 `ultralytics-log`。TensorBoard 仍可本地读取，但远程 TUI 不做 event 文件镜像。
 
 ## 示例
 
@@ -68,6 +68,11 @@ danling inspect examples/ultralytics_run --json
 danling status examples/ultralytics_run --config danling.yaml --no-hardware
 danling watch logs/run --source csv --config danling.yaml --no-hardware
 danling doctor logs/run --source csv --config danling.yaml --no-hardware
+
+# 在 danling.yaml 中配置 data_path 和 source 后，可省略 PATH 和 --source
+danling watch --no-hardware
+danling tui --no-hardware
+
 danling remote setup trainbox
 danling remote hardware trainbox
 danling remote tui trainbox --config danling.yaml
