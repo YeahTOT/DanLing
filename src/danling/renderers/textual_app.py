@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from danling.config import load_config
@@ -13,6 +14,15 @@ from danling.models import DanLingState, FurnaceState, PetMood
 from danling.readers.registry import read_history
 
 ANIMATION_INTERVAL = 0.25
+HARDWARE_BAR_WIDTH = 18
+
+
+@dataclass
+class HostResourceSnapshot:
+    """主机 CPU 和系统内存快照。"""
+
+    cpu_percent: float | None = None
+    memory_percent: float | None = None
 
 PET_FRAMES: dict[str, list[str]] = {
     "idle": [
@@ -376,6 +386,7 @@ def create_app(
             self.state: DanLingState | None = None
             self.error_message: str | None = None
             self.show_help = False
+            self.host_resources = HostResourceSampler()
 
         def compose(self) -> ComposeResult:
             yield Header()
@@ -449,7 +460,9 @@ def create_app(
             metrics_panel.update(
                 render_tui_metrics(self.state, source=source, path=path_label)
             )
-            hardware_panel.update(render_tui_hardware(self.state))
+            hardware_panel.update(
+                render_tui_hardware(self.state, host=self.host_resources.read())
+            )
             events_panel.update(render_tui_events(self.state, self.frame_index))
 
         def action_refresh(self) -> None:
@@ -543,21 +556,56 @@ def render_tui_pet(state: DanLingState, frame_index: int = 0) -> str:
     )
 
 
-def render_tui_hardware(state: DanLingState) -> str:
+def render_tui_hardware(
+    state: DanLingState,
+    host: HostResourceSnapshot | None = None,
+) -> str:
     """渲染硬件监控区域。"""
     lines = ["硬件监控"]
     if state.hardware:
         for device in state.hardware:
             device_name = "GPU" if device.device_type == "nvidia" else device.device_type.upper()
+            label = f"{device_name}:{device.device_id or '-'}"
+            if device.name:
+                label = f"{label} {device.name}"
+            lines.append(f"- [bold bright_yellow]{label}[/]  TEMP: {_fmt_temperature(device)}")
             lines.append(
-                f"- {device_name}:{device.device_id or '-'} "
-                f"util={_fmt(device.util_percent)}% mem={_fmt_memory(device)}"
+                "  MEM: "
+                f"{_progress_bar(_memory_percent(device), color='bright_yellow')} "
+                f"{_fmt_percent(_memory_percent(device), digits=1)}  {_fmt_memory(device)}"
             )
-            if device.temperature_c is not None:
-                lines.append(f"  temp={_fmt(device.temperature_c)}C")
+            lines.append(
+                "  UTL: "
+                f"{_progress_bar(device.util_percent, color='bright_yellow')} "
+                f"{_fmt_percent(device.util_percent, digits=0)}"
+            )
     else:
         lines.append("hardware: unknown")
+    host = host if host is not None else read_host_resources()
+    lines.extend(_render_host_resources(host))
     return "\n".join(lines)
+
+
+class HostResourceSampler:
+    """读取 Linux /proc 的轻量 CPU/MEM 采样器。"""
+
+    def __init__(self) -> None:
+        self._previous_cpu = _read_cpu_times()
+
+    def read(self) -> HostResourceSnapshot:
+        current_cpu = _read_cpu_times()
+        cpu_percent = _cpu_percent(self._previous_cpu, current_cpu)
+        if current_cpu is not None:
+            self._previous_cpu = current_cpu
+        return HostResourceSnapshot(
+            cpu_percent=cpu_percent,
+            memory_percent=_read_memory_percent(),
+        )
+
+
+def read_host_resources() -> HostResourceSnapshot:
+    """读取一次主机资源；非 Linux 或 /proc 不可用时自动降级。"""
+    return HostResourceSnapshot(memory_percent=_read_memory_percent())
 
 
 def render_tui_events(state: DanLingState, frame_index: int = 0) -> str:
@@ -608,10 +656,122 @@ def _fmt(value: float | int | None) -> str:
     return f"{value:.4f}"
 
 
+def _fmt_percent(value: float | int | None, *, digits: int = 1) -> str:
+    if value is None:
+        return "-"
+    clamped = max(0.0, min(100.0, float(value)))
+    if digits == 0:
+        return f"{clamped:.0f}%"
+    return f"{clamped:.{digits}f}%"
+
+
 def _fmt_memory(device) -> str:
     if device.memory_used_mb is None or device.memory_total_mb is None:
         return "-"
-    return f"{device.memory_used_mb / 1024:.1f}/{device.memory_total_mb / 1024:.1f}G"
+    used = device.memory_used_mb
+    total = device.memory_total_mb
+    if total >= 10_240:
+        return f"{used / 1024:.1f}GiB / {total / 1024:.1f}GiB"
+    return f"{used:.0f}MiB / {total:.0f}MiB"
+
+
+def _fmt_temperature(device) -> str:
+    if device.temperature_c is None:
+        return "-"
+    return f"{device.temperature_c:.0f}C"
+
+
+def _memory_percent(device) -> float | None:
+    ratio = device.memory_ratio
+    if ratio is None:
+        return None
+    return ratio * 100
+
+
+def _progress_bar(value: float | int | None, *, color: str) -> str:
+    if value is None:
+        return f"[dim][{' ' * HARDWARE_BAR_WIDTH}][/]"
+    clamped = max(0.0, min(100.0, float(value)))
+    filled = round(HARDWARE_BAR_WIDTH * clamped / 100)
+    empty = HARDWARE_BAR_WIDTH - filled
+    return f"[{color}]{'█' * filled}[/][dim]{'░' * empty}[/]"
+
+
+def _render_host_resources(host: HostResourceSnapshot) -> list[str]:
+    return [
+        (
+            "CPU: "
+            f"{_progress_bar(host.cpu_percent, color='cyan')} "
+            f"{_fmt_percent(host.cpu_percent, digits=1)}"
+        ),
+        (
+            "SYS MEM: "
+            f"{_progress_bar(host.memory_percent, color='magenta')} "
+            f"{_fmt_percent(host.memory_percent, digits=1)}"
+        ),
+    ]
+
+
+def _read_cpu_times() -> tuple[int, int] | None:
+    try:
+        with Path("/proc/stat").open(encoding="utf-8") as file:
+            first_line = file.readline()
+    except OSError:
+        return None
+    parts = first_line.split()
+    if len(parts) < 5 or parts[0] != "cpu":
+        return None
+    try:
+        values = [int(value) for value in parts[1:]]
+    except ValueError:
+        return None
+    idle = values[3] + (values[4] if len(values) > 4 else 0)
+    total = sum(values)
+    return idle, total
+
+
+def _cpu_percent(
+    previous: tuple[int, int] | None,
+    current: tuple[int, int] | None,
+) -> float | None:
+    if previous is None or current is None:
+        return None
+    previous_idle, previous_total = previous
+    current_idle, current_total = current
+    total_delta = current_total - previous_total
+    idle_delta = current_idle - previous_idle
+    if total_delta <= 0:
+        return None
+    return max(0.0, min(100.0, (1 - idle_delta / total_delta) * 100))
+
+
+def _read_memory_percent() -> float | None:
+    try:
+        with Path("/proc/meminfo").open(encoding="utf-8") as file:
+            values = _parse_meminfo(file.read())
+    except OSError:
+        return None
+    total = values.get("MemTotal")
+    available = values.get("MemAvailable")
+    if total is None or available is None or total <= 0:
+        return None
+    return max(0.0, min(100.0, (total - available) / total * 100))
+
+
+def _parse_meminfo(text: str) -> dict[str, int]:
+    values: dict[str, int] = {}
+    for line in text.splitlines():
+        key, separator, rest = line.partition(":")
+        if not separator:
+            continue
+        parts = rest.strip().split()
+        if not parts:
+            continue
+        try:
+            values[key] = int(parts[0])
+        except ValueError:
+            continue
+    return values
 
 
 def _fmt_realm_progress(realm) -> str:

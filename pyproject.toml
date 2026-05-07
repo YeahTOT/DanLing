@@ -1,6 +1,6 @@
 [project]
 name = "danling"
-version = "1.1.0"
+version = "1.2.0"
 description = "炼丹宠物 — 深度学习训练状态解释层，将 loss/mAP/GPU 状态解读为宠物情绪和炼丹炉状态"
 authors = [{ name = "贾涛" }]
 license = { text = "CC-BY-NC-ND-4.0" }

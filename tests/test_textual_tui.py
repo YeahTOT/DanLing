@@ -20,6 +20,7 @@ from danling.models import (
 )
 from danling.renderers.textual_app import (
     FURNACE_FRAMES,
+    HostResourceSnapshot,
     _read_tui_state,
     create_app,
     furnace_animation_frame,
@@ -196,6 +197,38 @@ def test_tui_panel_helpers_include_metrics_hardware_and_events() -> None:
     assert "元婴期" in render_tui_metrics(state)
     assert "GPU" in render_tui_hardware(state)
     assert "升级" in render_tui_events(state)
+
+
+def test_tui_hardware_renders_nvitop_style_bars_and_host_resources() -> None:
+    state = DanLingState(
+        hardware=[
+            HardwareSnapshot(
+                device_type="nvidia",
+                device_id="0",
+                util_percent=31,
+                memory_used_mb=1_574,
+                memory_total_mb=8_188,
+                temperature_c=38,
+            )
+        ],
+    )
+
+    text = render_tui_hardware(
+        state,
+        host=HostResourceSnapshot(cpu_percent=1.6, memory_percent=10.8),
+    )
+
+    assert "GPU:0" in text
+    assert "MEM:" in text
+    assert "1574MiB / 8188MiB" in text
+    assert "19.2%" in text
+    assert "UTL:" in text
+    assert "31%" in text
+    assert "TEMP: 38C" in text
+    assert "CPU:" in text
+    assert "1.6%" in text
+    assert "SYS MEM:" in text
+    assert "10.8%" in text
 
 
 def test_tui_metrics_can_show_source_and_path_context() -> None:
