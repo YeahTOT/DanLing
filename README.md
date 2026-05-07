@@ -2,7 +2,7 @@
 
 > 把训练日志和硬件指标翻译成一眼能看懂的终端训练状态。
 
-**当前版本：v1.1.0** · **Python：3.10+** · **许可证：CC BY-NC-ND 4.0**
+**当前版本：v1.2.0** · **Python：3.10+** · **许可证：CC BY-NC-ND 4.0**
 
 DanLing 是一个轻量的 Python CLI/TUI 工具。它读取训练日志和 GPU/NPU 状态，把 loss、mAP、显存、利用率这些数字解释成训练状态、宠物情绪、炼丹炉状态、修炼境界和诊断建议。
 
@@ -26,9 +26,9 @@ DanLing 是一个轻量的 Python CLI/TUI 工具。它读取训练日志和 GPU/
 | 状态解释 | 判断训练是否正常、变好、停滞、日志停更或出现 loss 异常 |
 | 修炼境界 | 用 baseline/SOTA 或手动阈值，把指标映射到五个境界 |
 | 诊断建议 | 提示 NaN/inf、loss 爆炸、长期无提升、显存风险、checkpoint 缺失等问题 |
-| 硬件状态 | 读取 NVIDIA GPU 和 Ascend NPU 基础状态，失败时自动降级 |
+| 硬件状态 | 读取 NVIDIA GPU、Ascend NPU、主机 CPU 和系统内存基础状态，失败时自动降级 |
 | 终端展示 | 支持 Rich 面板、循环 watch、Textual 全屏 TUI、配置 TUI 和 statusline |
-| 远程可视化 | 通过 SSH 密钥读取远程 `results.csv`，并读取远程 NVIDIA GPU 状态 |
+| 远程可视化 | 通过 SSH 密钥读取远程 `results.csv` 或官方 `.log/.txt`，并读取远程 NVIDIA GPU 状态 |
 | 日志回放 | 可按行回放历史 CSV/TensorBoard scalar，便于演示和调试 |
 
 ## 快速启动
@@ -92,18 +92,18 @@ danling simulate logs/ultralytics/results.csv logs/run --interval 2
 
 更完整的上手流程见 [快速启动](快速启动.md) 和 [Getting Started](docs/getting-started.md)。
 
-## v1.1.0 概览
+## v1.2.0 概览
 
-v1.1.0 在本地 CLI/TUI 闭环基础上加入 SSH 远程可视化：可以通过密钥读取远程训练日志、查看远程 NVIDIA GPU 状态，并在本地终端 TUI 中持续刷新远程训练过程。
+v1.2.0 继续打磨“配置好就能看”的本地和远程训练监控体验：配置文件可以保存默认数据源和日志路径，配置 TUI 增加数据源页面，监控 TUI 的硬件区域也改成更直观的进度条展示。
 
-| 类别 | v1.1.0 状态 |
+| 类别 | v1.2.0 状态 |
 | --- | --- |
 | 数据源 | Ultralytics CSV 和官方 log/txt 可用；TensorBoard event 可选可用 |
-| 展示方式 | Rich 面板、watch、statusline、Textual TUI 可用 |
-| 配置能力 | `danling init`、`danling config show`、`danling config tui` 可用 |
+| 展示方式 | Rich 面板、watch、statusline、Textual TUI 可用；TUI 展示日志模式、日志路径和硬件进度条 |
+| 配置能力 | `danling init`、`danling config show`、`danling config tui` 可用；可配置默认 `source` 和 `data_path` |
 | 诊断能力 | NaN/inf、loss 爆炸、无提升、日志停更、显存风险、低利用率、checkpoint 缺失 |
-| 硬件读取 | NVIDIA 基础支持；Ascend 保守解析 |
-| 远程监控 | `danling remote setup/hardware/status/watch/tui` 通过 SSH 密钥读取远程日志和 GPU |
+| 硬件读取 | NVIDIA 基础支持；Ascend 保守解析；Textual TUI 补充主机 CPU 和系统内存 |
+| 远程监控 | `danling remote setup/hardware/status/watch/tui` 通过 SSH 密钥读取远程日志和 GPU；支持 profile 关联配置 |
 | 当前限制 | 暂不支持 W&B/MLflow/Aim/ClearML 直连；暂无 Web Dashboard |
 
 ## 文档导航
@@ -119,7 +119,7 @@ v1.1.0 在本地 CLI/TUI 闭环基础上加入 SSH 远程可视化：可以通�
 | [Diagnostics](docs/diagnostics.md) | 诊断项和 `danling doctor` |
 | [Hardware](docs/hardware.md) | NVIDIA / Ascend 硬件读取和降级策略 |
 | [Development](docs/development.md) | 本地开发命令和模块边界 |
-| [Release v1.1.0](docs/releases/v1.1.0.md) | v1.1.0 发布说明 |
+| [Release v1.2.0](docs/releases/v1.2.0.md) | v1.2.0 发布说明 |
 
 ## 开发
 
