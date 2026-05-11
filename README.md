@@ -54,23 +54,10 @@ danling init
 danling config tui
 ```
 
-检查示例训练输出：
+通过TUI可视化
 
 ```bash
-danling inspect examples/ultralytics_run --json
-danling status examples/ultralytics_run --config danling.yaml --no-hardware
-danling doctor examples/ultralytics_run --config danling.yaml --no-hardware
-```
-
-持续监控训练目录（若已在 danling.yaml 配置 data_path 和 source，可省略参数）：
-
-```bash
-danling watch logs/run --source csv --config danling.yaml --no-hardware
-danling tui logs/run --source csv --config danling.yaml --no-hardware
-
-# 配置 data_path 后可直接运行
-danling watch --no-hardware
-danling tui --no-hardware
+danling tui
 ```
 
 通过 SSH 可视化远程训练：
