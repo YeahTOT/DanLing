@@ -349,6 +349,32 @@ def config_tui(
 
 
 @app.command()
+def api(
+    path: Annotated[Path | None, typer.Argument(help="可选训练日志目录或文件路径")] = None,
+    source: Annotated[str | None, typer.Option("--source", help=SOURCE_HELP)] = None,
+    config: Annotated[Path | None, typer.Option("--config", help="配置文件路径")] = None,
+    host: Annotated[str, typer.Option("--host", help="监听地址")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="监听端口")] = 8765,
+    no_hardware: Annotated[bool, typer.Option("--no-hardware", help="跳过硬件读取")] = False,
+) -> None:
+    """启动桌面端 Python sidecar API。"""
+    try:
+        from danling.api.main import run
+
+        run(
+            host=host,
+            port=port,
+            config_path=config,
+            path=path,
+            source=source,
+            no_hardware=no_hardware,
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
+
+@app.command()
 def tui(
     path: Annotated[Path | None, typer.Argument(help="训练日志目录或文件路径")] = None,
     source: Annotated[str, typer.Option("--source", help=SOURCE_HELP)] = "auto",

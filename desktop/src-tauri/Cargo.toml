@@ -1,0 +1,13 @@
+[package]
+name = "danling_desktop"
+version = "1.2.0"
+description = "DanLing desktop pet"
+authors = ["tot"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"

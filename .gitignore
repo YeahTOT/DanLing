@@ -17,6 +17,10 @@ dist/
 *.egg-info/
 *.egg
 
+# Frontend packaging
+node_modules/
+target/
+
 # Test, lint, and coverage caches
 .pytest_cache/
 .ruff_cache/
