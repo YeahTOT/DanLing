@@ -82,7 +82,7 @@ danling watch logs/run --source csv --config danling.yaml --no-hardware
 `danling tui` 和 `danling config tui` 需要：
 
 ```bash
-pip install "danling[tui]"
+pip install "danling-pet[tui]"
 ```
 
 不安装也可以使用 `danling status`、`danling watch` 和 `danling config show`。

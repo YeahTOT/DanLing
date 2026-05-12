@@ -8,8 +8,8 @@
 - [x] `danling status examples/ultralytics_run`
 - [x] `danling inspect examples/ultralytics_run --json`
 - [x] `danling hardware --json`
-- [ ] Verify `danling[tensorboard]`
-- [ ] Verify `danling[tui]`
+- [ ] Verify `danling-pet[tensorboard]`
+- [ ] Verify `danling-pet[tui]`
 - [x] Confirm version in `pyproject.toml` and `src/danling/__init__.py`
 
 Note: isolated `python -m build` requires a Python installation with `ensurepip`

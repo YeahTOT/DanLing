@@ -36,15 +36,15 @@ DanLing 是一个轻量的 Python CLI/TUI 工具。它读取训练日志和 GPU/
 安装基础包：
 
 ```bash
-pip install danling
+pip install danling-pet
 ```
 
 按需安装可选能力：
 
 ```bash
-pip install "danling[tui]"          # 全屏 TUI 和配置 TUI
-pip install "danling[tensorboard]"  # TensorBoard event reader
-pip install "danling[yaml]"         # PyYAML 配置解析
+pip install "danling-pet[tui]"          # 全屏 TUI 和配置 TUI
+pip install "danling-pet[tensorboard]"  # TensorBoard event reader
+pip install "danling-pet[yaml]"         # PyYAML 配置解析
 ```
 
 初始化配置（含数据源和路径，配置后 tui/watch 可不指定 PATH 和 --source）：

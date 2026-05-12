@@ -709,7 +709,7 @@ wheels = [
 ]
 
 [[package]]
-name = "danling"
+name = "danling-pet"
 version = "1.2.0"
 source = { editable = "." }
 dependencies = [

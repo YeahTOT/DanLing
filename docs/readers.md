@@ -29,7 +29,7 @@ danling inspect runs/detect/train --source auto --json
 `TensorBoardReader` 是可选能力：
 
 ```bash
-pip install "danling[tensorboard]"
+pip install "danling-pet[tensorboard]"
 danling inspect logs/tensorboard --source tensorboard --json
 danling inspect logs/tensorboard/train --source tensorboard --json
 ```
