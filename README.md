@@ -1,3 +1,5 @@
+
+
 # DanLing（丹灵）
 
 > 把训练日志和硬件指标翻译成一眼能看懂的终端训练状态。
@@ -69,7 +71,7 @@ danling remote status trainbox --config danling.yaml
 danling remote tui trainbox --config danling.yaml
 ```
 
-`remote setup` 会用 TUI 辅助填写 `user@host`、远程日志目录、数据源和 SSH 私钥路径，并提示执行 `ssh-copy-id`。监控阶段强制使用 `ssh -i <key> -o BatchMode=yes`，不会等待密码输入；远程 GPU 状态默认通过 `nvidia-smi` 读取，也可以用 `remote hardware` 单独查看。远程监控支持 Ultralytics `results.csv` 和官方控制台 `.log/.txt`，长 epoch 训练建议选 `ultralytics-log`。
+`remote setup` 会用 TUI 辅助填写 `user@host`、远程日志目录、数据源和 SSH 私钥路径，并提示执行 `ssh-copy-id -i <key>.pub user@host`。监控阶段强制使用 `ssh -i <key> -o BatchMode=yes`，不会等待密码输入；远程 GPU 状态默认通过 `nvidia-smi` 读取，也可以用 `remote hardware` 单独查看。远程监控支持 Ultralytics `results.csv` 和官方控制台 `.log/.txt`，长 epoch 训练建议选 `ultralytics-log`。
 
 回放历史日志做演示：
 
